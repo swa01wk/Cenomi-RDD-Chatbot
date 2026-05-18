@@ -32,10 +32,14 @@ _SENSITIVE_KEYS: frozenset[str] = frozenset(
         "credential",
         "credentials",
         "connection_string",
+        # Platform document storage identifiers — must not leak to traces
+        "document_id",
         # Prevent OpenAI key from leaking via config/settings dumps in traces
         "openai_api_key",
         # Prevent accidental system-prompt content from being stored in traces
         "internal_prompt",
+        # Platform internal API token
+        "internal_api_token",
     }
 )
 

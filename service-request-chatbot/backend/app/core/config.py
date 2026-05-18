@@ -41,6 +41,53 @@ class Settings(BaseSettings):
         default=None, validation_alias="FILE_UPLOAD_API_BASE_URL"
     )
 
+    # ── Platform auth (service-to-service; separate from user JWT) ────────────
+    platform_auth_base_url: str | None = Field(
+        default=None,
+        validation_alias="PLATFORM_AUTH_BASE_URL",
+        description=(
+            "Base URL for the Cenomi platform auth endpoint "
+            "(POST /cenomi-ai/login). Defaults to SERVICE_REQUEST_API_BASE_URL when absent."
+        ),
+    )
+    platform_internal_api_token: str | None = Field(
+        default=None,
+        validation_alias="PLATFORM_INTERNAL_API_TOKEN",
+        description="x-internal-api-token header value for the platform login call.",
+    )
+    platform_login_email: str | None = Field(
+        default=None,
+        validation_alias="PLATFORM_LOGIN_EMAIL",
+        description="Email address used for service-to-service platform login.",
+    )
+
+    # ── Platform API (service-to-service auth) ────────────────────────────────
+    # ``platform_base_url`` is an alias for ``service_request_api_base_url``
+    # kept for clarity in platform_api_client and related modules.
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def platform_base_url(self) -> str | None:
+        return self.service_request_api_base_url
+
+    platform_auth_base_url: str | None = Field(
+        default=None,
+        validation_alias="PLATFORM_AUTH_BASE_URL",
+        description=(
+            "Base URL for the platform auth endpoint (POST /cenomi-ai/login). "
+            "Defaults to platform_base_url when absent."
+        ),
+    )
+    platform_internal_api_token: str | None = Field(
+        default=None,
+        validation_alias="PLATFORM_INTERNAL_API_TOKEN",
+        description="Service-to-service internal API token for platform login.",
+    )
+    platform_login_email: str | None = Field(
+        default=None,
+        validation_alias="PLATFORM_LOGIN_EMAIL",
+        description="Email used for service-to-service platform login.",
+    )
+
     jwt_secret_key: str = Field(default="change-me", validation_alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
 

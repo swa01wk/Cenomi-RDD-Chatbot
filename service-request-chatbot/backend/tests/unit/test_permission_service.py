@@ -5,7 +5,8 @@ Coverage
 - User with the required role passes each action
 - User without the required role raises PermissionDeniedError
 - Both FM_APPROVAL and RDD_FINAL_APPROVAL share CAN_APPROVE_HANDOVER_SR
-- Unknown / unmapped action is fail-open (no error)
+- Unknown / unmapped action is fail-CLOSED (raises PermissionDeniedError)
+- New FM/RDD action mappings are present and enforced
 - PermissionDeniedError carries the correct action and required_role attributes
 """
 
@@ -46,6 +47,13 @@ class TestPermissionMapShape:
             "FM_APPROVAL",
             "RDD_FINAL_APPROVAL",
             "VIEW_HANDOVER_SR",
+            # New granular action mappings
+            "UPLOAD_FM_HANDOVER_DOCUMENT",
+            "SAVE_FM_HANDOVER_PROGRESS",
+            "APPROVE_FM_HANDOVER",
+            "REJECT_FM_HANDOVER",
+            "UPLOAD_RDD_HANDOVER_REPORT",
+            "SUBMIT_RDD_HANDOVER_REPORT",
         }
         assert expected.issubset(ACTION_PERMISSION_MAP.keys())
 
@@ -57,6 +65,18 @@ class TestPermissionMapShape:
 
     def test_rdd_approval_requires_can_approve(self) -> None:
         assert ACTION_PERMISSION_MAP["RDD_FINAL_APPROVAL"] == "CAN_APPROVE_HANDOVER_SR"
+
+    def test_fm_review_actions_require_fm_review_permission(self) -> None:
+        for action in ("UPLOAD_FM_HANDOVER_DOCUMENT", "SAVE_FM_HANDOVER_PROGRESS"):
+            assert ACTION_PERMISSION_MAP[action] == "CAN_FM_REVIEW_HANDOVER_SR", action
+
+    def test_fm_approve_reject_require_approve_permission(self) -> None:
+        for action in ("APPROVE_FM_HANDOVER", "REJECT_FM_HANDOVER"):
+            assert ACTION_PERMISSION_MAP[action] == "CAN_APPROVE_FM_HANDOVER_SR", action
+
+    def test_rdd_review_actions_require_rdd_review_permission(self) -> None:
+        for action in ("UPLOAD_RDD_HANDOVER_REPORT", "SUBMIT_RDD_HANDOVER_REPORT"):
+            assert ACTION_PERMISSION_MAP[action] == "CAN_RDD_REVIEW_HANDOVER_SR", action
 
     def test_view_requires_view_permission(self) -> None:
         assert ACTION_PERMISSION_MAP["VIEW_HANDOVER_SR"] == "VIEW_FIT_OUT_HANDOVER"
@@ -89,9 +109,27 @@ class TestCheckPass:
         auth = _auth("CAN_RAISE_HANDOVER_SR", "SOME_OTHER_ROLE", "ADMIN")
         _svc.check("CREATE_HANDOVER_SR", auth)
 
-    def test_unknown_action_is_fail_open(self) -> None:
-        """An action not in the map must silently pass (fail-open for POC)."""
-        _svc.check("UNMAPPED_ACTION_XYZ", _EMPTY_AUTH)
+    def test_unknown_action_is_fail_closed(self) -> None:
+        """An action not in the map must raise PermissionDeniedError (fail-closed)."""
+        with pytest.raises(PermissionDeniedError) as exc_info:
+            _svc.check("UNMAPPED_ACTION_XYZ", _EMPTY_AUTH)
+        assert exc_info.value.required_role == "UNKNOWN_ACTION"
+
+    def test_new_fm_review_action_passes_with_correct_role(self) -> None:
+        auth = _auth("CAN_FM_REVIEW_HANDOVER_SR")
+        _svc.check("SAVE_FM_HANDOVER_PROGRESS", auth)
+
+    def test_new_fm_review_action_denied_without_role(self) -> None:
+        with pytest.raises(PermissionDeniedError):
+            _svc.check("SAVE_FM_HANDOVER_PROGRESS", _EMPTY_AUTH)
+
+    def test_new_rdd_review_action_passes_with_correct_role(self) -> None:
+        auth = _auth("CAN_RDD_REVIEW_HANDOVER_SR")
+        _svc.check("SUBMIT_RDD_HANDOVER_REPORT", auth)
+
+    def test_new_rdd_review_action_denied_without_role(self) -> None:
+        with pytest.raises(PermissionDeniedError):
+            _svc.check("SUBMIT_RDD_HANDOVER_REPORT", _EMPTY_AUTH)
 
 
 # ---------------------------------------------------------------------------

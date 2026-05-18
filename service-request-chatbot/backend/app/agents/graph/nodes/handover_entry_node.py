@@ -142,11 +142,11 @@ async def handover_entry_node(state: ServiceRequestState) -> dict[str, Any]:
     action_override: str | None = state.get("action_override")  # type: ignore[assignment]
 
     # ── 0. Explicit UI action — takes priority over text parsing ───────────
-    if action_override == "confirm":
+    if action_override in ("confirm", "confirm_create_sr"):
         log.info("handover_entry.action_override_confirm")
         return {"confirmation_status": "CONFIRMED"}
 
-    if action_override == "cancel":
+    if action_override in ("cancel", "cancel_create_sr"):
         log.info("handover_entry.action_override_cancel")
         return {
             "confirmation_status": "REJECTED",
@@ -154,6 +154,20 @@ async def handover_entry_node(state: ServiceRequestState) -> dict[str, Any]:
                 "No problem — what would you like to change? "
                 "Please tell me which field to update."
             ),
+        }
+
+    if action_override == "upload_document":
+        log.info("handover_entry.action_override_upload_document")
+        return {
+            "status": "WAITING_FOR_USER",
+            "response_message": "Please use the upload interface to attach your document.",
+        }
+
+    if action_override == "cancel_update":
+        log.info("handover_entry.action_override_cancel_update")
+        return {
+            "status": "WAITING_FOR_USER",
+            "response_message": "Update cancelled. What would you like to do next?",
         }
 
     # ── 1. Workflow cancel / restart ───────────────────────────────────────

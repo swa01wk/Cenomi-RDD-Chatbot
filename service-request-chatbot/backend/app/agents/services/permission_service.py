@@ -22,14 +22,25 @@ from app.types.chat import AuthContext
 # ---------------------------------------------------------------------------
 
 ACTION_PERMISSION_MAP: dict[str, str] = {
-    # Tenant / mall manager raises a new handover SR
+    # ── CREATE stage (Mall Manager) ───────────────────────────────────────────
     "CREATE_HANDOVER_SR": "CAN_RAISE_HANDOVER_SR",
-    # FM manager approves the handover at the FM review stage
-    "FM_APPROVAL": "CAN_APPROVE_HANDOVER_SR",
-    # DD/RDD engineer gives final approval
-    "RDD_FINAL_APPROVAL": "CAN_APPROVE_HANDOVER_SR",
-    # Any read access to a handover SR record
+
+    # ── FM_REVIEW stage (FM Manager / Operations) ─────────────────────────────
+    "UPLOAD_FM_HANDOVER_DOCUMENT": "CAN_FM_REVIEW_HANDOVER_SR",
+    "SAVE_FM_HANDOVER_PROGRESS": "CAN_FM_REVIEW_HANDOVER_SR",
+    "APPROVE_FM_HANDOVER": "CAN_APPROVE_FM_HANDOVER_SR",
+    "REJECT_FM_HANDOVER": "CAN_APPROVE_FM_HANDOVER_SR",
+
+    # ── RDD_REVIEW stage (DD Engineer) ────────────────────────────────────────
+    "UPLOAD_RDD_HANDOVER_REPORT": "CAN_RDD_REVIEW_HANDOVER_SR",
+    "SUBMIT_RDD_HANDOVER_REPORT": "CAN_RDD_REVIEW_HANDOVER_SR",
+
+    # ── Read / view ───────────────────────────────────────────────────────────
     "VIEW_HANDOVER_SR": "VIEW_FIT_OUT_HANDOVER",
+
+    # ── Legacy entries (kept for backward compatibility) ──────────────────────
+    "FM_APPROVAL": "CAN_APPROVE_HANDOVER_SR",
+    "RDD_FINAL_APPROVAL": "CAN_APPROVE_HANDOVER_SR",
 }
 
 
@@ -79,14 +90,13 @@ class PermissionService:
         absent from ``auth.roles``.
 
         Unknown actions (not present in ``ACTION_PERMISSION_MAP``) are
-        **fail-open** for the POC: if no mapping exists, the call succeeds.
-        This keeps unclassified legacy paths unblocked while explicit
-        high-value actions are protected.
+        **fail-closed**: an unrecognised action raises ``PermissionDeniedError``
+        with ``required_role="UNKNOWN_ACTION"``.  This prevents unclassified
+        paths from silently bypassing permission enforcement.
         """
         required = ACTION_PERMISSION_MAP.get(action)
         if required is None:
-            # Action is not in the map → no restriction defined yet.
-            return
+            raise PermissionDeniedError(action=action, required_role="UNKNOWN_ACTION")
         if required not in auth.roles:
             raise PermissionDeniedError(action=action, required_role=required)
 
@@ -104,6 +114,18 @@ class PermissionService:
         *action* should be one of ``"FM_APPROVAL"`` or ``"RDD_FINAL_APPROVAL"``.
         """
         self.check(action, auth)
+
+    def ensure_can_fm_review(self, auth: AuthContext) -> None:
+        """Assert the caller may upload FM documents and save FM progress."""
+        self.check("SAVE_FM_HANDOVER_PROGRESS", auth)
+
+    def ensure_can_approve_fm(self, auth: AuthContext) -> None:
+        """Assert the caller may approve the FM review stage."""
+        self.check("APPROVE_FM_HANDOVER", auth)
+
+    def ensure_can_rdd_review(self, auth: AuthContext) -> None:
+        """Assert the caller may upload and submit the RDD handover report."""
+        self.check("SUBMIT_RDD_HANDOVER_REPORT", auth)
 
     def ensure_can_view_trace(self, auth: AuthContext) -> None:
         """Assert the caller may read handover SR records."""
