@@ -1,0 +1,1459 @@
+{
+  "info": {
+    "_postman_id": "63b59e15-49ee-43ef-a83f-9b54c355df9f",
+    "name": "Handover SR — FIT_OUT_AND_HANDOVER / HANDOVER",
+    "description": "Handover SR workflow (FIT_OUT_AND_HANDOVER / HANDOVER).\n\n**Auth:** Run **Auth → POST cenomi-ai/login** first (`x-internal-api-token` + email). The **Tests** script saves `data.access_token` into **`{{access_token}}`** for collection Bearer auth on all other requests.\n\n**URLs:** **`{{auth_base_url}}`** — direct API for login (e.g. `http://localhost:8080/v1`). **`{{baseUrl}}`** — service-requests/files (e.g. same host or tenant proxy `http://localhost:4200/backend_api`). Align both if your token must match the API host.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "48449094",
+    "_collection_link": "https://go.postman.co/collection/48449094-63b59e15-49ee-43ef-a83f-9b54c355df9f?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST cenomi-ai/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  if (j.success && j.data && j.data.access_token) {",
+                  "    pm.collectionVariables.set(\"access_token\", j.data.access_token);",
+                  "    console.log(\"Saved access_token to collection variable\");",
+                  "  } else {",
+                  "    console.warn(\"No access_token in response:\", JSON.stringify(j));",
+                  "  }",
+                  "} catch (e) {",
+                  "  console.warn(\"Could not parse JSON or save token:\", e.message);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-internal-api-token",
+                "value": "{{internal_api_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{login_email}}\" // Mall Manager qacenomimm@gmail.com, FM Manager qacenomifm@gmail.com, RDDPM cenomitestrdd@gmail.com\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cenomi-ai/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cenomi-ai",
+                "login"
+              ]
+            },
+            "description": "Internal API key (UUID from DB/migration). Response `{ success, data: { access_token } }` — token is stored for Bearer auth on handover requests."
+          },
+          "response": [
+            {
+              "name": "POST cenomi-ai/login",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-internal-api-token",
+                    "value": "{{internal_api_token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{login_email}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/cenomi-ai/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "cenomi-ai",
+                    "login"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "836"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:00:09 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"access_token\": \"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJyZXF1ZXN0X2lkIjoiYjQ4NmZiYWUtYzBlYS00NDU2LWI5OTUtNjhlZGU2MGUzYjQ0In0.SdZW0a_bBnj5PddIvUxGsvGqHw-GTKL1lgmStCmS9OeI24VYWoXSp3HsTB1v13GztRUEtzta9liV2sYQMrnPvySBuj0Ma9TzZwI_jhIRGFK46VN7e541DIumt4H8Ia_-D9yFmMvrTlA4plLZeLogRCVidgCqrm9vdFm8cD7rDLa_StC1Ty4tT4rCJ9TaxOMr532IJbdzYtsHLl9fyhLoaQWUXVECa_8oOObrGATCL18YC6EjkrVz3-ZRCItVfVbLCQx5RmZYfrMGNmgcWLnfO0WD3IYID80KfAoAzewbmkBxWYjeLjl2TLIQngA55ZeY8Aw7VGY6v4fsLIUg6EFhdmc8OwLxeKCjNp7crs11tQwjPkWFj0broM6SESnW35jpQ9LPAMN_7-3EDKYRKDLn97jrjSfNXwR6cm3KlmyI9cB79edwIyTIT87UVzGqD8GFKgwVmvGQS8hcdlUeJjBNvgu4FEvjkfEQ-Dbh78Dh_MqzH_DGFOIffKsRBdi8G8k_CoUvuG0d0lk_Bi9tubzFThlrQWmmGaEqnwQ6SOKzSsahCmVU3wpGMi89DneODnpHAxWOjNZ1XS_awjK5APNPHm3SxTibFm-0K5iIcOFIT0BShbVIcYMFIsf3mhzLQpIKjanZfVzfBWkvOatXw14adEgN2crlnU7a_p8lFUuSVnQ\"\n    }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "0 — Reference",
+      "item": [
+        {
+          "name": "GET workflows (form skeleton)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-requests/workflows?service_category=FIT_OUT_AND_HANDOVER&sub_category=HANDOVER&sort_by=updated_at&order=ASC",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-requests",
+                "workflows"
+              ],
+              "query": [
+                {
+                  "key": "service_category",
+                  "value": "FIT_OUT_AND_HANDOVER"
+                },
+                {
+                  "key": "sub_category",
+                  "value": "HANDOVER"
+                },
+                {
+                  "key": "sort_by",
+                  "value": "updated_at"
+                },
+                {
+                  "key": "order",
+                  "value": "ASC"
+                }
+              ]
+            },
+            "description": "`FetchWorkFlowList` — query: `service_category`, `sub_category`, optional `workflow_id`, `sort_by`, `order`."
+          },
+          "response": [
+            {
+              "name": "GET workflows (form skeleton)",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-requests/workflows?service_category=FIT_OUT_AND_HANDOVER&sub_category=HANDOVER&sort_by=updated_at&order=ASC",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-requests",
+                    "workflows"
+                  ],
+                  "query": [
+                    {
+                      "key": "service_category",
+                      "value": "FIT_OUT_AND_HANDOVER"
+                    },
+                    {
+                      "key": "sub_category",
+                      "value": "HANDOVER"
+                    },
+                    {
+                      "key": "sort_by",
+                      "value": "updated_at"
+                    },
+                    {
+                      "key": "order",
+                      "value": "ASC"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:00:23 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"list\": [\n            {\n                \"workflow_id\": 43,\n                \"category\": \"FIT_OUT_AND_HANDOVER\",\n                \"sub_category\": \"HANDOVER\",\n                \"flow\": [\n                    {\n                        \"workflow_level\": 1,\n                        \"role\": \"MALL_MANAGER\"\n                    },\n                    {\n                        \"workflow_level\": 2,\n                        \"role\": \"OPERATIONS\"\n                    },\n                    {\n                        \"workflow_level\": 2,\n                        \"role\": \"FM_MANAGER\"\n                    },\n                    {\n                        \"workflow_level\": 3,\n                        \"role\": \"DD_ENGINEER\"\n                    }\n                ],\n                \"forms\": {\n                    \"skelton\": [\n                        {\n                            \"title\": \"handover\",\n                            \"section\": [\n                                {\n                                    \"id\": 500,\n                                    \"grid\": true,\n                                    \"fields\": [\n                                        {\n                                            \"id\": 501,\n                                            \"name\": \"tenant\",\n                                            \"type\": \"TenantSelect\",\n                                            \"admin\": true,\n                                            \"label\": \"formtenant\",\n                                            \"required\": true,\n                                            \"showUsers\": false,\n                                            \"placeHolder\": \"placeholderTenant\"\n                                        },\n                                        {\n                                            \"id\": 502,\n                                            \"name\": \"lease_brand_mall\",\n                                            \"type\": \"LeaseBrandMall\",\n                                            \"label\": \"LeaseID\",\n                                            \"required\": true,\n                                            \"tenantReq\": true,\n                                            \"placeHolder\": \"formLeaseBrandMall\",\n                                            \"fieldsUpdate\": [\n                                                \"unit_codes\",\n                                                \"city\",\n                                                \"contracted_area\",\n                                                \"brand_id\",\n                                                \"tenant_profile_id\"\n                                            ],\n                                            \"enableUnitCodes\": true\n                                        },\n                                        {\n                                            \"id\": 504,\n                                            \"name\": \"city\",\n                                            \"type\": \"input\",\n                                            \"label\": \"location\",\n                                            \"disabled\": true,\n                                            \"readonly\": true,\n                                            \"placeHolder\": \"formPlaceholderLocation\"\n                                        },\n                                        {\n                                            \"id\": 505,\n                                            \"name\": \"contracted_area\",\n                                            \"type\": \"input\",\n                                            \"label\": \"AreaSqm\",\n                                            \"disabled\": true,\n                                            \"readonly\": true,\n                                            \"placeHolder\": \"formPlaceholderArea\"\n                                        }\n                                    ]\n                                },\n                                {\n                                    \"id\": 506,\n                                    \"fields\": [\n                                        {\n                                            \"id\": 507,\n                                            \"name\": \"title\",\n                                            \"type\": \"input\",\n                                            \"label\": \"formTitle\",\n                                            \"required\": true,\n                                            \"tenantReq\": true,\n                                            \"placeHolder\": \"formPlaceholderTitle\"\n                                        }\n                                    ]\n                                },\n                                {\n                                    \"id\": 508,\n                                    \"fields\": [\n                                        {\n                                            \"id\": 509,\n                                            \"name\": \"description\",\n                                            \"type\": \"textarea\",\n                                            \"label\": \"formDescription\",\n                                            \"required\": true,\n                                            \"tenantReq\": true,\n                                            \"placeHolder\": \"\"\n                                        }\n                                    ]\n                                },\n                                {\n                                    \"id\": 510,\n                                    \"grid\": true,\n                                    \"fields\": [\n                                        {\n                                            \"id\": 511,\n                                            \"name\": \"startDate\",\n                                            \"type\": \"dateTimePicker\",\n                                            \"label\": \"Start Date\",\n                                            \"required\": true,\n                                            \"tenantReq\": true\n                                        },\n                                        {\n                                            \"id\": 512,\n                                            \"name\": \"endDate\",\n                                            \"type\": \"dateTimePicker\",\n                                            \"label\": \"End Date\",\n                                            \"required\": true,\n                                            \"tenantReq\": true\n                                        },\n                                        {\n                                            \"id\": 513,\n                                            \"name\": \"inspection_done_by\",\n                                            \"type\": \"dropdown\",\n                                            \"label\": \"formInspectionDoneBy\",\n                                            \"options\": [\n                                                {\n                                                    \"label\": \"formInspectionDoneByFMManager\",\n                                                    \"value\": \"FM_MANAGER\"\n                                                },\n                                                {\n                                                    \"label\": \"formInspectionDoneByOperations\",\n                                                    \"value\": \"OPERATIONS\"\n                                                }\n                                            ],\n                                            \"required\": true,\n                                            \"tenantReq\": true,\n                                            \"placeHolder\": \"formPlaceholderInspectionDoneBy\"\n                                        }\n                                    ],\n                                    \"grid_col\": 3\n                                },\n                                {\n                                    \"id\": 514,\n                                    \"grid\": false,\n                                    \"fields\": [\n                                        {\n                                            \"id\": 515,\n                                            \"name\": \"notes\",\n                                            \"type\": \"textarea\",\n                                            \"label\": \"notes\",\n                                            \"placeHolder\": \"\"\n                                        }\n                                    ]\n                                },\n                                {\n                                    \"id\": 520,\n                                    \"roles\": [\n                                        12\n                                    ],\n                                    \"fields\": [\n                                        {\n                                            \"id\": 521,\n                                            \"name\": \"guideLineLink\",\n                                            \"type\": \"linkInput\",\n                                            \"label\": \"GuideLinesLink\",\n                                            \"required\": true,\n                                            \"placeHolder\": \"formGuideLineLink\"\n                                        }\n                                    ]\n                                },\n                                {\n                                    \"id\": 516,\n                                    \"grid\": false,\n                                    \"admin\": true,\n                                    \"roles\": [\n                                        12,\n                                        11,\n                                        20\n                                    ],\n                                    \"fields\": [\n                                        {\n                                            \"id\": 517,\n                                            \"name\": \"documents\",\n                                            \"type\": \"multipleAttachments\",\n                                            \"documentTypeOptions\": [\n                                                {\n                                                    \"role\": 20,\n                                                    \"documents\": [\n                                                        {\n                                                            \"name\": \"SR_COP_CHECKLIST_OTHER\",\n                                                            \"statuses\": []\n                                                        },\n                                                        {\n                                                            \"name\": \"SR_HANDOVER_CHECKLIST\",\n                                                            \"statuses\": []\n                                                        },\n                                                        {\n                                                            \"name\": \"SR_HANDOVER_SITE_SURVEY\",\n                                                            \"statuses\": []\n                                                        }\n                                                    ]\n                                                },\n                                                {\n                                                    \"role\": 81,\n                                                    \"documents\": [\n                                                        {\n                                                            \"name\": \"SR_COP_CHECKLIST_OTHER\",\n                                                            \"statuses\": []\n                                                        },\n                                                        {\n                                                            \"name\": \"SR_HANDOVER_CHECKLIST\",\n                                                            \"statuses\": []\n                                                        },\n                                                        {\n                                                            \"name\": \"SR_HANDOVER_SITE_SURVEY\",\n                                                            \"statuses\": []\n                                                        }\n                                                    ]\n                                                },\n                                                {\n                                                    \"role\": 11,\n                                                    \"documents\": [\n                                                        {\n                                                            \"name\": \"SR_HANDOVER_OTHER\",\n                                                            \"statuses\": []\n                                                        }\n                                                    ]\n                                                },\n                                                {\n                                                    \"role\": 12,\n                                                    \"documents\": [\n                                                        {\n                                                            \"name\": \"SR_HANDOVER_OTHER\",\n                                                            \"statuses\": []\n                                                        },\n                                                        {\n                                                            \"name\": \"DR_SR_HANDOVER_REPORT\",\n                                                            \"statuses\": [\n                                                                \"APPROVED\",\n                                                                \"APPROVED_WITH_CHANGES\"\n                                                            ]\n                                                        },\n                                                        {\n                                                            \"name\": \"SR_REJECTED_HANDOVER_REPORT\",\n                                                            \"statuses\": [\n                                                                \"DISAPPROVED\"\n                                                            ]\n                                                        }\n                                                    ]\n                                                }\n                                            ]\n                                        }\n                                    ],\n                                    \"tenantVisible\": false\n                                },\n                                {\n                                    \"id\": 518,\n                                    \"grid\": false,\n                                    \"fields\": [\n                                        {\n                                            \"id\": 519,\n                                            \"name\": \"comments\",\n                                            \"type\": \"textarea\",\n                                            \"label\": \"formComments\",\n                                            \"required\": true,\n                                            \"tenantReq\": true,\n                                            \"placeHolder\": \"\"\n                                        }\n                                    ]\n                                },\n                                {\n                                    \"id\": 522,\n                                    \"grid\": true,\n                                    \"roles\": [\n                                        20,\n                                        81\n                                    ],\n                                    \"title\": \"Unit readiness and expected handover\",\n                                    \"fields\": [\n                                        {\n                                            \"id\": 523,\n                                            \"name\": \"unit_readiness_date\",\n                                            \"type\": \"date\",\n                                            \"label\": \"Unit Readiness Date\",\n                                            \"required\": true,\n                                            \"placeHolder\": \"Select unit readiness date\"\n                                        },\n                                        {\n                                            \"id\": 524,\n                                            \"name\": \"expected_handover_date\",\n                                            \"type\": \"date\",\n                                            \"label\": \"Expected Handover Date (Unit Readiness + 7 days)\",\n                                            \"required\": true,\n                                            \"placeHolder\": \"Select expected handover date\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ],\n                    \"intialState\": {\n                        \"admin\": {\n                            \"company_name\": \"\",\n                            \"tenant_contact\": \"\"\n                        },\n                        \"common\": {\n                            \"mall\": \"\",\n                            \"brand\": \"\",\n                            \"lease\": \"\",\n                            \"notes\": \"\",\n                            \"title\": \"\",\n                            \"endDate\": \"\",\n                            \"comments\": \"\",\n                            \"documents\": [\n                                {\n                                    \"comment\": \"\",\n                                    \"document_id\": \"\",\n                                    \"document_type_id\": \"SR_HANDOVER_OTHER\"\n                                }\n                            ],\n                            \"startDate\": \"\",\n                            \"attachments\": \"\",\n                            \"description\": \"\",\n                            \"documents_ids\": [],\n                            \"guideLineLink\": \"\",\n                            \"inspectionDoneBy\": \"FM_MANAGER\",\n                            \"lease_brand_mall\": \"\",\n                            \"inspection_done_by\": \"FM_MANAGER\",\n                            \"document_status_map\": [],\n                            \"unit_readiness_date\": \"\",\n                            \"expected_handover_date\": \"\"\n                        }\n                    },\n                    \"assignmentType\": \"workflow\"\n                },\n                \"created_at\": \"2024-11-14T15:30:29.800458Z\",\n                \"updated_at\": \"2026-03-16T19:06:46.37841Z\",\n                \"created_by\": \" \",\n                \"updated_by\": \" \"\n            }\n        ]\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET service-request by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-requests/{{sr_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-requests",
+                "{{sr_id}}"
+              ]
+            },
+            "description": "`FetchServiceRequestByID` — use after Step 1 to refresh payload / `sr_operations`."
+          },
+          "response": [
+            {
+              "name": "GET service-request by id",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-requests/{{sr_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-requests",
+                    "{{sr_id}}"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:00:29 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"service_request_id\": \"8426\",\n        \"tenant_profile_id\": 17,\n        \"title\": \"bn\",\n        \"payload\": {\n            \"mall\": \"Aziz Mall\",\n            \"brand\": \"Brand Flormar\",\n            \"lease\": \"t0028604\",\n            \"notes\": \"\",\n            \"owner\": \"test owner\",\n            \"phone\": \"876656474564\",\n            \"title\": \"bn\",\n            \"workers\": [\n                {\n                    \"phone\": \"\",\n                    \"full_name\": \"bn n\",\n                    \"designation\": \"b vn\",\n                    \"document_id\": \"8f4f34aa-24de-45fc-808d-fc357926f8b3\",\n                    \"company_name\": \"bcbvc\",\n                    \"country_code\": \"966\",\n                    \"iqama_number\": \"7645455876\"\n                }\n            ],\n            \"type_work\": \"hgcghcgj\",\n            \"unit_type\": \"Store\",\n            \"work_info\": \"gvcnn\",\n            \"department\": \"operations\",\n            \"trade_name\": \"test trade\",\n            \"unit_codes\": [\n                \"GF039A\"\n            ],\n            \"contract_id\": 86,\n            \"description\": \"hb\",\n            \"planneddate\": {\n                \"worktimeto\": \"2026-01-29T12:30:00.000Z\",\n                \"completionto\": \"\",\n                \"worktimedate\": \"30/01/2026\",\n                \"worktimefrom\": \"2026-01-29T10:30:00.000Z\",\n                \"worktimetoLT\": \"06:00 PM\",\n                \"completionfrom\": \"\",\n                \"worktimefromLT\": \"04:00 PM\",\n                \"completionworkdate\": \"31/01/2026\"\n            },\n            \"property_id\": 6,\n            \"user_action\": null,\n            \"company_name\": 17,\n            \"country_code\": \"+966\",\n            \"list_equipment\": \"vbnv\",\n            \"tenant_contact\": \"Test My Eleven - Company Admin\",\n            \"lease_brand_mall\": \"t0028604 - Brand Flormar - Aziz Mall\",\n            \"responsible_person\": \"hgvgvj\"\n        },\n        \"status\": \"EXPIRED\",\n        \"sr_status\": \"EXPIRED\",\n        \"created_at\": \"2026-01-29T09:26:44.891731Z\",\n        \"updated_at\": \"2026-01-29T09:26:44.891731Z\",\n        \"category\": \"WORK_PERMIT\",\n        \"sub_category\": \"CONSTRUCTION_COLD\",\n        \"operation_history\": [\n            {\n                \"operator_name\": \"IT User 2\",\n                \"status\": \"SUBMITTED\",\n                \"comment\": \"\",\n                \"created_at\": \"2026-01-29T09:26:44.891731Z\",\n                \"operator_role\": \"COMPANY_ADMIN\",\n                \"user_type\": \"TENANT\"\n            }\n        ],\n        \"service_request_operations\": [\n            {\n                \"service_request_operation_id\": 18855,\n                \"assigned_role\": \"DD_ENGINEER\",\n                \"workflow_level\": 1,\n                \"status\": \"IN_PROGRESS\",\n                \"created_at\": \"2026-01-29T09:26:44.891731Z\",\n                \"updated_at\": \"2026-01-29T09:26:44.891731Z\",\n                \"updated_by\": \"IT User 2\",\n                \"Assigned_user_id\": 0,\n                \"role_name_en\": \"RDD Project Manager\",\n                \"role_name_ar\": \"مدير المشاريع RDD\"\n            },\n            {\n                \"service_request_operation_id\": 18856,\n                \"assigned_role\": \"MALL_MANAGER\",\n                \"workflow_level\": 2,\n                \"status\": \"YET_TO_START\",\n                \"created_at\": \"2026-01-29T09:26:44.891731Z\",\n                \"updated_at\": \"2026-01-29T09:26:44.891731Z\",\n                \"updated_by\": \"IT User 2\",\n                \"Assigned_user_id\": 0,\n                \"role_name_en\": \"Mall Manager\",\n                \"role_name_ar\": \"مدير المجمع التجاري\"\n            },\n            {\n                \"service_request_operation_id\": 18857,\n                \"assigned_role\": \"OPERATIONS\",\n                \"workflow_level\": 2,\n                \"status\": \"YET_TO_START\",\n                \"created_at\": \"2026-01-29T09:26:44.891731Z\",\n                \"updated_at\": \"2026-01-29T09:26:44.891731Z\",\n                \"updated_by\": \"IT User 2\",\n                \"Assigned_user_id\": 0,\n                \"role_name_en\": \"Operations\",\n                \"role_name_ar\": \"العمليات\"\n            }\n        ],\n        \"service_request_attachments\": [],\n        \"created_by\": \"IT User 2\",\n        \"updated_by\": \"IT User 2\",\n        \"pms_post_status\": \"\",\n        \"pms_post_log\": null,\n        \"created_user_role\": \"COMPANY_ADMIN\",\n        \"created_for\": 0\n    }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Step 1 — Mall Manager: Create SR",
+      "item": [
+        {
+          "name": "POST create Handover SR (no top-level status)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [],\n    \"guideLineLink\": \"\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [],\n    \"unit_readiness_date\": \"\",\n    \"expected_handover_date\": \"\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"user_action\": null,\n    \"unit_codes\": [\"FF050\"],\n    \"contracted_area\": 420,\n    \"city\": \"Jeddah\",\n    \"brand_id\": {{brand_id}},\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"contract_id\": {{lease_id}},\n    \"property_id\": {{property_id}},\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"endDateLT\": \"13/05/2026 07:20 PM\"\n  },\n  \"title\": \"Testing\",\n  \"tenant_profile_id\": {{tenant_profile_id}},\n  \"property_id\": {{property_id}},\n  \"service_category\": \"FIT_OUT_AND_HANDOVER\",\n  \"sub_category\": \"HANDOVER\",\n  \"lease_code\": \"{{lease_code}}\",\n  \"lease_id\": {{lease_id}},\n  \"service_request_id\": \"\"\n}\n"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/service-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-requests"
+              ]
+            },
+            "description": "`Create` — omit `status`; backend defaults workflow. Copy `service_request_id` from response into `{{sr_id}}`."
+          },
+          "response": [
+            {
+              "name": "POST create Handover SR (no top-level status)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [],\n    \"guideLineLink\": \"\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [],\n    \"unit_readiness_date\": \"\",\n    \"expected_handover_date\": \"\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"user_action\": null,\n    \"unit_codes\": [\"FF050\"],\n    \"contracted_area\": 420,\n    \"city\": \"Jeddah\",\n    \"brand_id\": {{brand_id}},\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"contract_id\": {{lease_id}},\n    \"property_id\": {{property_id}},\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"endDateLT\": \"13/05/2026 07:20 PM\"\n  },\n  \"title\": \"Testing\",\n  \"tenant_profile_id\": {{tenant_profile_id}},\n  \"property_id\": {{property_id}},\n  \"service_category\": \"FIT_OUT_AND_HANDOVER\",\n  \"sub_category\": \"HANDOVER\",\n  \"lease_code\": \"{{lease_code}}\",\n  \"lease_id\": {{lease_id}},\n  \"service_request_id\": \"\"\n}\n"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/service-requests",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-requests"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "55"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:01:53 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"service_request_id\": \"10197\"\n    }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Step 2 — FM Manager",
+      "item": [
+        {
+          "name": "PUT files — SR_HANDOVER_CHECKLIST (binary body)",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/files?query=SERVICE_REQUEST&file_extension=pdf&document_type_id=SR_HANDOVER_CHECKLIST&lease_id={{lease_id}}&brand_id={{brand_id}}&property_id={{property_id}}&lease_code={{lease_code}}&sr_id={{sr_id}}&tenant_profile_id={{tenant_profile_id}}&document_type_status=&signed_url=true&file_name={{file_name_pdf}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "files"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "SERVICE_REQUEST"
+                },
+                {
+                  "key": "file_extension",
+                  "value": "pdf"
+                },
+                {
+                  "key": "document_type_id",
+                  "value": "SR_HANDOVER_CHECKLIST"
+                },
+                {
+                  "key": "lease_id",
+                  "value": "{{lease_id}}"
+                },
+                {
+                  "key": "brand_id",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "property_id",
+                  "value": "{{property_id}}"
+                },
+                {
+                  "key": "lease_code",
+                  "value": "{{lease_code}}"
+                },
+                {
+                  "key": "sr_id",
+                  "value": "{{sr_id}}"
+                },
+                {
+                  "key": "tenant_profile_id",
+                  "value": "{{tenant_profile_id}}"
+                },
+                {
+                  "key": "document_type_status",
+                  "value": ""
+                },
+                {
+                  "key": "signed_url",
+                  "value": "true"
+                },
+                {
+                  "key": "file_name",
+                  "value": "{{file_name_pdf}}"
+                }
+              ]
+            },
+            "description": "Duplicate this request and change `document_type_id` to: `SR_HANDOVER_SITE_SURVEY`, `SR_COP_CHECKLIST_OTHER`, `SR_HANDOVER_OTHER`. Body = raw PDF bytes. Save returned `document_id` into `{{doc_fm_uuid}}` (accumulate all FM doc IDs)."
+          },
+          "response": [
+            {
+              "name": "PUT files — SR_HANDOVER_CHECKLIST (binary body)",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "file",
+                  "file": {
+                    "src": "postman-cloud:///1f15034a-56a8-48e0-a33c-4e622b657bd3"
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/files?query=SERVICE_REQUEST&file_extension=pdf&document_type_id=SR_HANDOVER_CHECKLIST&lease_id={{lease_id}}&brand_id={{brand_id}}&property_id={{property_id}}&lease_code={{lease_code}}&sr_id={{sr_id}}&tenant_profile_id={{tenant_profile_id}}&document_type_status=&signed_url=true&file_name={{file_name_pdf}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "files"
+                  ],
+                  "query": [
+                    {
+                      "key": "query",
+                      "value": "SERVICE_REQUEST"
+                    },
+                    {
+                      "key": "file_extension",
+                      "value": "pdf"
+                    },
+                    {
+                      "key": "document_type_id",
+                      "value": "SR_HANDOVER_CHECKLIST"
+                    },
+                    {
+                      "key": "lease_id",
+                      "value": "{{lease_id}}"
+                    },
+                    {
+                      "key": "brand_id",
+                      "value": "{{brand_id}}"
+                    },
+                    {
+                      "key": "property_id",
+                      "value": "{{property_id}}"
+                    },
+                    {
+                      "key": "lease_code",
+                      "value": "{{lease_code}}"
+                    },
+                    {
+                      "key": "sr_id",
+                      "value": "{{sr_id}}"
+                    },
+                    {
+                      "key": "tenant_profile_id",
+                      "value": "{{tenant_profile_id}}"
+                    },
+                    {
+                      "key": "document_type_status",
+                      "value": ""
+                    },
+                    {
+                      "key": "signed_url",
+                      "value": "true"
+                    },
+                    {
+                      "key": "file_name",
+                      "value": "{{file_name_pdf}}"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "512"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:04:16 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"document_id\": \"184a2c2f-5671-4cc2-8010-560c6823f218\",\n        \"file_path\": \"common-file-upload/service-request/1222/sample-handover.pdf___1778832256-v1.pdf\",\n        \"signed_url\": \"https://ccwetpstagestorage.blob.core.windows.net/service-request/common-file-upload/service-request/1222/sample-handover.pdf___1778832256-v1.pdf?se=2026-06-14T08%3A04%3A16Z&sig=ePSuTN06jBGizl3KxJuBtfJleGYksrW7knqa39iPY48%3D&sp=r&spr=https&sr=b&sv=2020-10-02\",\n        \"document_type_id\": \"SR_HANDOVER_CHECKLIST\",\n        \"appian_document_id\": 0\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "PATCH save progress IN_PROCESS (full payload)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [\n      \"{{doc_fm_uuid}}\"\n    ],\n    \"guideLineLink\": \"\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [\n      {\n        \"id\": \"{{doc_fm_uuid}}\",\n        \"document_status\": \"\",\n        \"handover_date\": \"\",\n        \"actual_handover_date\": \"\",\n        \"fitout_start_date\": \"\",\n        \"fitout_end_date\": \"\",\n        \"trading_date\": \"\"\n      }\n    ],\n    \"unit_readiness_date\": \"2026-05-12\",\n    \"expected_handover_date\": \"2026-05-20\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"brand_id\": {{brand_id}},\n    \"city\": \"Jeddah\",\n    \"contract_id\": {{lease_id}},\n    \"contracted_area\": 420,\n    \"endDateLT\": \"13/05/2026 07:20 PM\",\n    \"property_id\": {{property_id}},\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"unit_codes\": [\"FF050\"],\n    \"user_action\": null,\n    \"ref_no\": \"{{sr_id}}\",\n    \"updated_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"created_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"sub_category\": \"HANDOVER\",\n    \"document_id\": \"\",\n    \"lease_id\": \"{{lease_code}}\",\n    \"sr_id\": \"{{sr_id}}\",\n    \"current_sr_status\": \"IN_PROCESS\",\n    \"sr_operations\": [],\n    \"document_saved\": true\n  },\n  \"title\": \"Testing\",\n  \"tenant_profile_id\": {{tenant_profile_id}},\n  \"property_id\": {{property_id}},\n  \"service_category\": \"FIT_OUT_AND_HANDOVER\",\n  \"sub_category\": \"HANDOVER\",\n  \"lease_code\": \"{{lease_code}}\",\n  \"lease_id\": {{lease_id}},\n  \"status\": \"IN_PROCESS\",\n  \"service_request_id\": \"{{sr_id}}\"\n}\n"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/service-requests/{{sr_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-requests",
+                "{{sr_id}}"
+              ]
+            },
+            "description": "`Edit` — refresh `sr_operations` from GET before sending if your backend validates them strictly."
+          },
+          "response": [
+            {
+              "name": "PATCH save progress IN_PROCESS (full payload)",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [\n      \"{{doc_fm_uuid}}\"\n    ],\n    \"guideLineLink\": \"\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [\n      {\n        \"id\": \"{{doc_fm_uuid}}\",\n        \"document_status\": \"\",\n        \"handover_date\": \"\",\n        \"actual_handover_date\": \"\",\n        \"fitout_start_date\": \"\",\n        \"fitout_end_date\": \"\",\n        \"trading_date\": \"\"\n      }\n    ],\n    \"unit_readiness_date\": \"2026-05-12\",\n    \"expected_handover_date\": \"2026-05-20\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"brand_id\": {{brand_id}},\n    \"city\": \"Jeddah\",\n    \"contract_id\": {{lease_id}},\n    \"contracted_area\": 420,\n    \"endDateLT\": \"13/05/2026 07:20 PM\",\n    \"property_id\": {{property_id}},\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"unit_codes\": [\"FF050\"],\n    \"user_action\": null,\n    \"ref_no\": \"{{sr_id}}\",\n    \"updated_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"created_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"sub_category\": \"HANDOVER\",\n    \"document_id\": \"\",\n    \"lease_id\": \"{{lease_code}}\",\n    \"sr_id\": \"{{sr_id}}\",\n    \"current_sr_status\": \"IN_PROCESS\",\n    \"sr_operations\": [],\n    \"document_saved\": true\n  },\n  \"title\": \"Testing\",\n  \"tenant_profile_id\": {{tenant_profile_id}},\n  \"property_id\": {{property_id}},\n  \"service_category\": \"FIT_OUT_AND_HANDOVER\",\n  \"sub_category\": \"HANDOVER\",\n  \"lease_code\": \"{{lease_code}}\",\n  \"lease_id\": {{lease_id}},\n  \"status\": \"IN_PROCESS\",\n  \"service_request_id\": \"{{sr_id}}\"\n}\n"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/service-requests/{{sr_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-requests",
+                    "{{sr_id}}"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "49"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:04:53 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": \"Successfully processed\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "PATCH FM Approve (minimal top-level)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [\n      \"{{doc_fm_uuid}}\"\n    ],\n    \"guideLineLink\": \"\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [\n      {\n        \"actual_handover_date\": \"\",\n        \"document_status\": \"\",\n        \"expected_handover_date\": \"2026-05-20\",\n        \"fitout_end_date\": \"\",\n        \"fitout_start_date\": \"\",\n        \"handover_date\": \"\",\n        \"id\": \"{{doc_fm_uuid}}\",\n        \"trading_date\": \"\"\n      }\n    ],\n    \"unit_readiness_date\": \"2026-05-12\",\n    \"expected_handover_date\": \"2026-05-20\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"brand_id\": {{brand_id}},\n    \"city\": \"Jeddah\",\n    \"contract_id\": {{lease_id}},\n    \"contracted_area\": 420,\n    \"created_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"current_sr_status\": \"IN_PROCESS\",\n    \"document_id\": \"\",\n    \"document_saved\": true,\n    \"endDateLT\": \"13/05/2026 07:20 PM\",\n    \"lease_id\": \"{{lease_code}}\",\n    \"property_id\": {{property_id}},\n    \"ref_no\": \"{{sr_id}}\",\n    \"sr_id\": \"{{sr_id}}\",\n    \"sr_operations\": [],\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"sub_category\": \"HANDOVER\",\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"unit_codes\": [\"FF050\"],\n    \"updated_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"user_action\": null\n  },\n  \"user_action\": null,\n  \"status\": \"APPROVED\",\n  \"comment\": \"ok\",\n  \"title\": \"Testing\",\n  \"sub_category\": \"HANDOVER\"\n}\n"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/service-requests/{{sr_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-requests",
+                "{{sr_id}}"
+              ]
+            },
+            "description": "Advances FM_MANAGER → FINISHED, DD_ENGINEER → IN_PROGRESS."
+          },
+          "response": [
+            {
+              "name": "PATCH FM Approve (minimal top-level)",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [\n      \"{{doc_fm_uuid}}\"\n    ],\n    \"guideLineLink\": \"\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [\n      {\n        \"actual_handover_date\": \"\",\n        \"document_status\": \"\",\n        \"expected_handover_date\": \"2026-05-20\",\n        \"fitout_end_date\": \"\",\n        \"fitout_start_date\": \"\",\n        \"handover_date\": \"\",\n        \"id\": \"{{doc_fm_uuid}}\",\n        \"trading_date\": \"\"\n      }\n    ],\n    \"unit_readiness_date\": \"2026-05-12\",\n    \"expected_handover_date\": \"2026-05-20\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"brand_id\": {{brand_id}},\n    \"city\": \"Jeddah\",\n    \"contract_id\": {{lease_id}},\n    \"contracted_area\": 420,\n    \"created_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"current_sr_status\": \"IN_PROCESS\",\n    \"document_id\": \"\",\n    \"document_saved\": true,\n    \"endDateLT\": \"13/05/2026 07:20 PM\",\n    \"lease_id\": \"{{lease_code}}\",\n    \"property_id\": {{property_id}},\n    \"ref_no\": \"{{sr_id}}\",\n    \"sr_id\": \"{{sr_id}}\",\n    \"sr_operations\": [],\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"sub_category\": \"HANDOVER\",\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"unit_codes\": [\"FF050\"],\n    \"updated_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"user_action\": null\n  },\n  \"user_action\": null,\n  \"status\": \"APPROVED\",\n  \"comment\": \"ok\",\n  \"title\": \"Testing\",\n  \"sub_category\": \"HANDOVER\"\n}\n"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/service-requests/{{sr_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-requests",
+                    "{{sr_id}}"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "49"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:04:57 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": \"Successfully processed\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Step 3 — RDD PM / DD_ENGINEER",
+      "item": [
+        {
+          "name": "PUT files — DR_SR_HANDOVER_REPORT (document_type_status=APPROVED)",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": "postman-cloud:///1f15034a-56a8-48e0-a33c-4e622b657bd3"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/files?query=SERVICE_REQUEST&file_extension=pdf&document_type_id=DR_SR_HANDOVER_REPORT&lease_id={{lease_id}}&brand_id={{brand_id}}&property_id={{property_id}}&lease_code={{lease_code}}&sr_id={{sr_id}}&tenant_profile_id={{tenant_profile_id}}&document_type_status=APPROVED&signed_url=true&file_name={{file_name_pdf}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "files"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "SERVICE_REQUEST"
+                },
+                {
+                  "key": "file_extension",
+                  "value": "pdf"
+                },
+                {
+                  "key": "document_type_id",
+                  "value": "DR_SR_HANDOVER_REPORT"
+                },
+                {
+                  "key": "lease_id",
+                  "value": "{{lease_id}}"
+                },
+                {
+                  "key": "brand_id",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "property_id",
+                  "value": "{{property_id}}"
+                },
+                {
+                  "key": "lease_code",
+                  "value": "{{lease_code}}"
+                },
+                {
+                  "key": "sr_id",
+                  "value": "{{sr_id}}"
+                },
+                {
+                  "key": "tenant_profile_id",
+                  "value": "{{tenant_profile_id}}"
+                },
+                {
+                  "key": "document_type_status",
+                  "value": "APPROVED"
+                },
+                {
+                  "key": "signed_url",
+                  "value": "true"
+                },
+                {
+                  "key": "file_name",
+                  "value": "{{file_name_pdf}}"
+                }
+              ]
+            },
+            "description": "Store returned `document_id` in `{{doc_dd_report_uuid}}`."
+          },
+          "response": [
+            {
+              "name": "PUT files — DR_SR_HANDOVER_REPORT (document_type_status=APPROVED)",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "file",
+                  "file": {
+                    "src": "postman-cloud:///1f15034a-56a8-48e0-a33c-4e622b657bd3"
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/files?query=SERVICE_REQUEST&file_extension=pdf&document_type_id=DR_SR_HANDOVER_REPORT&lease_id={{lease_id}}&brand_id={{brand_id}}&property_id={{property_id}}&lease_code={{lease_code}}&sr_id={{sr_id}}&tenant_profile_id={{tenant_profile_id}}&document_type_status=APPROVED&signed_url=true&file_name={{file_name_pdf}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "files"
+                  ],
+                  "query": [
+                    {
+                      "key": "query",
+                      "value": "SERVICE_REQUEST"
+                    },
+                    {
+                      "key": "file_extension",
+                      "value": "pdf"
+                    },
+                    {
+                      "key": "document_type_id",
+                      "value": "DR_SR_HANDOVER_REPORT"
+                    },
+                    {
+                      "key": "lease_id",
+                      "value": "{{lease_id}}"
+                    },
+                    {
+                      "key": "brand_id",
+                      "value": "{{brand_id}}"
+                    },
+                    {
+                      "key": "property_id",
+                      "value": "{{property_id}}"
+                    },
+                    {
+                      "key": "lease_code",
+                      "value": "{{lease_code}}"
+                    },
+                    {
+                      "key": "sr_id",
+                      "value": "{{sr_id}}"
+                    },
+                    {
+                      "key": "tenant_profile_id",
+                      "value": "{{tenant_profile_id}}"
+                    },
+                    {
+                      "key": "document_type_status",
+                      "value": "APPROVED"
+                    },
+                    {
+                      "key": "signed_url",
+                      "value": "true"
+                    },
+                    {
+                      "key": "file_name",
+                      "value": "{{file_name_pdf}}"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "514"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:05:57 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"document_id\": \"68c503c0-fec9-4f88-865d-41af25994055\",\n        \"file_path\": \"common-file-upload/service-request/4532/sample-handover.pdf___1778832356-v1.pdf\",\n        \"signed_url\": \"https://ccwetpstagestorage.blob.core.windows.net/service-request/common-file-upload/service-request/4532/sample-handover.pdf___1778832356-v1.pdf?se=2026-06-14T08%3A05%3A57Z&sig=8r4JhkgkS%2BkqpPAFDs38Fv0V7wPH3tOniPCWe5u11LQ%3D&sp=r&spr=https&sr=b&sv=2020-10-02\",\n        \"document_type_id\": \"DR_SR_HANDOVER_REPORT\",\n        \"appian_document_id\": 0\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST submit report REPORT_SUBMITTED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [\n      \"{{doc_fm_uuid}}\",\n      \"{{doc_dd_report_uuid}}\"\n    ],\n    \"guideLineLink\": \"http://google.com\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [\n      {\n        \"actual_handover_date\": \"\",\n        \"document_status\": \"\",\n        \"expected_handover_date\": \"2026-05-20\",\n        \"fitout_end_date\": \"\",\n        \"fitout_start_date\": \"\",\n        \"handover_date\": \"\",\n        \"id\": \"{{doc_fm_uuid}}\",\n        \"trading_date\": \"\"\n      },\n      {\n        \"id\": \"{{doc_dd_report_uuid}}\",\n        \"document_status\": \"APPROVED\",\n        \"handover_date\": \"\",\n        \"actual_handover_date\": \"12/05/2026\",\n        \"fitout_start_date\": \"14/05/2026\",\n        \"fitout_end_date\": \"21/05/2026\",\n        \"trading_date\": \"28/05/2026\"\n      }\n    ],\n    \"unit_readiness_date\": \"2026-05-12\",\n    \"expected_handover_date\": \"2026-05-20\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"brand_id\": {{brand_id}},\n    \"city\": \"Jeddah\",\n    \"contract_id\": {{lease_id}},\n    \"contracted_area\": 420,\n    \"created_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"current_sr_status\": \"IN_PROCESS\",\n    \"document_id\": \"\",\n    \"document_saved\": true,\n    \"endDateLT\": \"13/05/2026 07:20 PM\",\n    \"lease_id\": \"{{lease_code}}\",\n    \"property_id\": {{property_id}},\n    \"ref_no\": \"{{sr_id}}\",\n    \"sr_id\": \"{{sr_id}}\",\n    \"sr_operations\": [],\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"sub_category\": \"HANDOVER\",\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"unit_codes\": [\"FF050\"],\n    \"updated_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"user_action\": null\n  },\n  \"title\": \"Testing\",\n  \"tenant_profile_id\": {{tenant_profile_id}},\n  \"property_id\": {{property_id}},\n  \"service_category\": \"FIT_OUT_AND_HANDOVER\",\n  \"sub_category\": \"HANDOVER\",\n  \"lease_code\": \"{{lease_code}}\",\n  \"lease_id\": {{lease_id}},\n  \"status\": \"REPORT_SUBMITTED\",\n  \"service_request_id\": \"{{sr_id}}\"\n}\n"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/service-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-requests"
+              ]
+            },
+            "description": "`Create` path reused for report submission with existing `service_request_id`. Four dates on DD report doc: DD/MM/YYYY ordering per UI rule."
+          },
+          "response": [
+            {
+              "name": "POST submit report REPORT_SUBMITTED",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [\n      \"{{doc_fm_uuid}}\",\n      \"{{doc_dd_report_uuid}}\"\n    ],\n    \"guideLineLink\": \"http://google.com\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [\n      {\n        \"actual_handover_date\": \"\",\n        \"document_status\": \"\",\n        \"expected_handover_date\": \"2026-05-20\",\n        \"fitout_end_date\": \"\",\n        \"fitout_start_date\": \"\",\n        \"handover_date\": \"\",\n        \"id\": \"{{doc_fm_uuid}}\",\n        \"trading_date\": \"\"\n      },\n      {\n        \"id\": \"{{doc_dd_report_uuid}}\",\n        \"document_status\": \"APPROVED\",\n        \"handover_date\": \"\",\n        \"actual_handover_date\": \"12/05/2026\",\n        \"fitout_start_date\": \"14/05/2026\",\n        \"fitout_end_date\": \"21/05/2026\",\n        \"trading_date\": \"28/05/2026\"\n      }\n    ],\n    \"unit_readiness_date\": \"2026-05-12\",\n    \"expected_handover_date\": \"2026-05-20\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"brand_id\": {{brand_id}},\n    \"city\": \"Jeddah\",\n    \"contract_id\": {{lease_id}},\n    \"contracted_area\": 420,\n    \"created_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"current_sr_status\": \"IN_PROCESS\",\n    \"document_id\": \"\",\n    \"document_saved\": true,\n    \"endDateLT\": \"13/05/2026 07:20 PM\",\n    \"lease_id\": \"{{lease_code}}\",\n    \"property_id\": {{property_id}},\n    \"ref_no\": \"{{sr_id}}\",\n    \"sr_id\": \"{{sr_id}}\",\n    \"sr_operations\": [],\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"sub_category\": \"HANDOVER\",\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"unit_codes\": [\"FF050\"],\n    \"updated_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"user_action\": null\n  },\n  \"title\": \"Testing\",\n  \"tenant_profile_id\": {{tenant_profile_id}},\n  \"property_id\": {{property_id}},\n  \"service_category\": \"FIT_OUT_AND_HANDOVER\",\n  \"sub_category\": \"HANDOVER\",\n  \"lease_code\": \"{{lease_code}}\",\n  \"lease_id\": {{lease_id}},\n  \"status\": \"REPORT_SUBMITTED\",\n  \"service_request_id\": \"{{sr_id}}\"\n}\n"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/service-requests",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-requests"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "55"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:07:10 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"service_request_id\": \"10197\"\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "PATCH final APPROVED",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [\n      \"{{doc_fm_uuid}}\",\n      \"{{doc_dd_report_uuid}}\"\n    ],\n    \"guideLineLink\": \"http://google.com\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [\n      {\n        \"actual_handover_date\": \"\",\n        \"document_status\": \"\",\n        \"expected_handover_date\": \"2026-05-20\",\n        \"fitout_end_date\": \"\",\n        \"fitout_start_date\": \"\",\n        \"handover_date\": \"\",\n        \"id\": \"{{doc_fm_uuid}}\",\n        \"trading_date\": \"\",\n        \"unit_readiness_date\": \"2026-05-12\"\n      },\n      {\n        \"actual_handover_date\": \"12/05/2026\",\n        \"document_status\": \"APPROVED\",\n        \"expected_handover_date\": \"2026-05-20\",\n        \"fitout_end_date\": \"21/05/2026\",\n        \"fitout_start_date\": \"14/05/2026\",\n        \"handover_date\": \"\",\n        \"id\": \"{{doc_dd_report_uuid}}\",\n        \"trading_date\": \"28/05/2026\",\n        \"unit_readiness_date\": \"2026-05-12\"\n      }\n    ],\n    \"unit_readiness_date\": \"2026-05-12\",\n    \"expected_handover_date\": \"2026-05-20\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"brand_id\": {{brand_id}},\n    \"city\": \"Jeddah\",\n    \"contract_id\": {{lease_id}},\n    \"contracted_area\": 420,\n    \"created_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"current_sr_status\": \"REPORT_SUBMITTED\",\n    \"document_id\": \"\",\n    \"document_saved\": true,\n    \"endDateLT\": \"13/05/2026 07:20 PM\",\n    \"lease_id\": \"{{lease_code}}\",\n    \"property_id\": {{property_id}},\n    \"ref_no\": \"{{sr_id}}\",\n    \"sr_id\": \"{{sr_id}}\",\n    \"sr_operations\": [],\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"sub_category\": \"HANDOVER\",\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"unit_codes\": [\"FF050\"],\n    \"updated_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"user_action\": null\n  },\n  \"user_action\": null,\n  \"status\": \"APPROVED\",\n  \"comment\": \"approved\",\n  \"title\": \"Testing\",\n  \"sub_category\": \"HANDOVER\"\n}\n"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/service-requests/{{sr_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-requests",
+                "{{sr_id}}"
+              ]
+            },
+            "description": "Final approval — SR reaches APPROVED."
+          },
+          "response": [
+            {
+              "name": "PATCH final APPROVED",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"payload\": {\n    \"mall\": \"Jawharat Jeddah\",\n    \"brand\": \"Brand Under Armour\",\n    \"lease\": \"{{lease_code}}\",\n    \"notes\": \"\",\n    \"title\": \"Testing\",\n    \"endDate\": \"2026-05-13T13:50:00.000Z\",\n    \"comments\": \"Test\",\n    \"startDate\": \"2026-05-12T13:50:00.000Z\",\n    \"attachments\": \"\",\n    \"description\": \"test\",\n    \"documents_ids\": [\n      \"{{doc_fm_uuid}}\",\n      \"{{doc_dd_report_uuid}}\"\n    ],\n    \"guideLineLink\": \"http://google.com\",\n    \"inspectionDoneBy\": \"FM_MANAGER\",\n    \"lease_brand_mall\": \"{{lease_code}} - Brand Under Armour - Jawharat Jeddah\",\n    \"inspection_done_by\": \"FM_MANAGER\",\n    \"document_status_map\": [\n      {\n        \"actual_handover_date\": \"\",\n        \"document_status\": \"\",\n        \"expected_handover_date\": \"2026-05-20\",\n        \"fitout_end_date\": \"\",\n        \"fitout_start_date\": \"\",\n        \"handover_date\": \"\",\n        \"id\": \"{{doc_fm_uuid}}\",\n        \"trading_date\": \"\",\n        \"unit_readiness_date\": \"2026-05-12\"\n      },\n      {\n        \"actual_handover_date\": \"12/05/2026\",\n        \"document_status\": \"APPROVED\",\n        \"expected_handover_date\": \"2026-05-20\",\n        \"fitout_end_date\": \"21/05/2026\",\n        \"fitout_start_date\": \"14/05/2026\",\n        \"handover_date\": \"\",\n        \"id\": \"{{doc_dd_report_uuid}}\",\n        \"trading_date\": \"28/05/2026\",\n        \"unit_readiness_date\": \"2026-05-12\"\n      }\n    ],\n    \"unit_readiness_date\": \"2026-05-12\",\n    \"expected_handover_date\": \"2026-05-20\",\n    \"company_name\": \"116\",\n    \"tenant_contact\": \"\",\n    \"brand_id\": {{brand_id}},\n    \"city\": \"Jeddah\",\n    \"contract_id\": {{lease_id}},\n    \"contracted_area\": 420,\n    \"created_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"current_sr_status\": \"REPORT_SUBMITTED\",\n    \"document_id\": \"\",\n    \"document_saved\": true,\n    \"endDateLT\": \"13/05/2026 07:20 PM\",\n    \"lease_id\": \"{{lease_code}}\",\n    \"property_id\": {{property_id}},\n    \"ref_no\": \"{{sr_id}}\",\n    \"sr_id\": \"{{sr_id}}\",\n    \"sr_operations\": [],\n    \"startDateLT\": \"12/05/2026 07:20 PM\",\n    \"sub_category\": \"HANDOVER\",\n    \"tenant_profile_id\": {{tenant_profile_id}},\n    \"unit_codes\": [\"FF050\"],\n    \"updated_at\": \"2026-05-11T13:50:43.277381Z\",\n    \"user_action\": null\n  },\n  \"user_action\": null,\n  \"status\": \"APPROVED\",\n  \"comment\": \"approved\",\n  \"title\": \"Testing\",\n  \"sub_category\": \"HANDOVER\"\n}\n"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/service-requests/{{sr_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-requests",
+                    "{{sr_id}}"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Content-Length",
+                  "value": "49"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 15 May 2026 08:07:24 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "none"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "no-referrer-when-downgrade"
+                },
+                {
+                  "key": "Permissions-Policy",
+                  "value": "geolocation=();"
+                },
+                {
+                  "key": "Strict-Transport-Security",
+                  "value": "max-age=31536000"
+                },
+                {
+                  "key": "X-XSS-Protection",
+                  "value": "1; mode=block"
+                },
+                {
+                  "key": "Content-Security-Policy",
+                  "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "deny"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Expect-Ct",
+                  "value": "max-age=604800,enforce"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"data\": \"Successfully processed\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "auth_base_url",
+      "value": "http://localhost:8080/v1"
+    },
+    {
+      "key": "internal_api_token",
+      "value": ""
+    },
+    {
+      "key": "login_email",
+      "value": "user@example.com"
+    },
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4200/backend_api"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "brand_id",
+      "value": "267"
+    },
+    {
+      "key": "doc_dd_report_uuid",
+      "value": "184c1912-31af-4822-a0c9-cf47d0afc7cd"
+    },
+    {
+      "key": "doc_fm_uuid",
+      "value": "a74ef88b-b1fa-483d-8d3e-a74cb9d2833c"
+    },
+    {
+      "key": "file_name_pdf",
+      "value": "sample-handover.pdf___"
+    },
+    {
+      "key": "lease_code",
+      "value": "t0105712"
+    },
+    {
+      "key": "lease_id",
+      "value": "95404"
+    },
+    {
+      "key": "property_id",
+      "value": "3041"
+    },
+    {
+      "key": "sr_id",
+      "value": "8426"
+    },
+    {
+      "key": "tenant_profile_id",
+      "value": "116"
+    }
+  ]
+}
