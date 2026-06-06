@@ -6,18 +6,18 @@ The sections in this document reference concepts, nodes, and rules that are defi
 
 | Doc | Why it is needed for this file |
 |-----|-------------------------------|
-| [`agent-design.md`](agent-design.md) | **Most important companion.** Defines every graph node referenced in the CREATE_SR sequence diagram (`supervisor_node`, `field_extraction_node`, `merge_state_node`, `lease_lookup_node`, `validation_node`, `confirmation_node`, `payload_builder_node`, `api_submission_node`). Also covers the full routing flowchart, `ServiceRequestGraphState` type, `handover_entry_node` confirmation parsing, and the agent registry. Without this, the sequence diagram has no implementation context. |
+| [`agent-design.md`](agent-design.md) | **Most important companion.** Defines every graph node referenced throughout this file — CREATE_SR nodes (`supervisor_node`, `field_extraction_node`, `merge_state_node`, `lease_lookup_node`, `validation_node`, `confirmation_node`, `payload_builder_node`, `api_submission_node`) and FM/RDD nodes (`sr_status_sync_node`, `fm_review_entry_node`, `rdd_review_entry_node`, `fm_confirmation`, `fm_payload_builder_node`, `fm_api_submission_node`, `rdd_confirmation`, `rdd_payload_builder_node`, `rdd_api_submission_node`, `preview_node`). Also covers the full routing flowchart, `ServiceRequestGraphState` type, `handover_entry_node` confirmation parsing, the agent registry, and the `_AGENT_ENTRY_NODES` dispatch table. |
 | [`security-guardrails.md`](security-guardrails.md) | Required for three specific sections here: (1) the **Injection Guard** step in the CREATE_SR sequence diagram — explains `scan_message()`, risk scoring, and what happens on detection; (2) the **Backend-Derived Field Protection** in the Required Fields section — explains `BACKEND_PROTECTED_FIELDS`, the `HandoverExtractedFields` Pydantic validator, and the confidence threshold; (3) the **Confirmation Enforcement** section — explains the two-layer confirmation guard (`handover_entry_node` keyword matching + `api_submission_node` hard guards). |
 | [`architecture.md`](architecture.md) | Provides the system-level context for this workflow — how the LangGraph graph sits inside FastAPI, how `ChatOrchestrationService` orchestrates the turn, the DB schema for `service_request_drafts` (where `collected_data` is persisted), and the integration diagram showing the chatbot's relationship to the Cenomi Lease-Tenant API and Service Request API. |
 | [`api-reference.md`](api-reference.md) | Covers the two external-facing endpoints directly referenced here: (1) `POST /api/chat/service-request` — the chat endpoint that triggers the CREATE_SR graph run; (2) `POST /api/v1/upload` — the upload endpoint referenced in the Required Documents section (MIME validation, document type enforcement). |
-| [`extensibility-guide.md`](extensibility-guide.md) | Essential for the **FM Workflow** and **RDD Workflow** sections, both of which are marked *"graph routing and agent nodes not yet implemented"*. The extensibility guide describes Path A (FM/RDD as lifecycle stages of the same Handover agent) and lists the exact files and steps needed to wire these stages: entry nodes, graph edges, payload builders, and the frontend document upload components. |
+| [`extensibility-guide.md`](extensibility-guide.md) | Essential for the **FM Workflow** and **RDD Workflow** sections. The extensibility guide explains what is already wired (entry nodes, graph routing, payload builders, confirmation and submission nodes) and what remains to be completed (real file upload, status sync validation, structured frontend actions). Also covers Path B for adding entirely new service request agent types. |
 | [`debugging-guide.md`](debugging-guide.md) | Useful when troubleshooting issues that arise in this workflow — specifically: lease lookup failures (lease not found / multiple matches), validation errors not clearing, missing fields appearing despite user providing them, and payload builder errors. References the SQL queries needed to inspect `service_request_drafts.collected_data` at each stage. |
 
 ---
 
 ## Overview
 
-The chatbot currently supports one fully-implemented workflow: **CREATE_SR** (Create Handover Service Request). Two additional stages — FM Review and RDD Review — are defined in the schema as placeholders for future implementation.
+The chatbot supports three workflow stages for the Handover Service Request: **CREATE_SR**, **FM_REVIEW**, and **RDD_REVIEW**. All three are fully implemented — graph nodes, routing, payload builders, confirmation gates, and submission nodes are wired end-to-end. What remains is completing the real platform file upload integration and structured frontend actions (see `extensibility-guide.md` for the precise pending list).
 
 The workflow is stage-driven: each stage defines its own `required_fields`, `required_documents`, and `role`. The authoritative source of truth is `app/agents/schemas/handover_schema.py`.
 
@@ -121,7 +121,7 @@ The FM (Facilities Management) review stage represents the review step after the
 
 **Stage key:** `FM_REVIEW`  
 **Role:** `FM_MANAGER`  
-**Status:** Schema fully defined; graph routing and agent nodes not yet implemented.
+**Status:** Fully implemented. Graph nodes (`fm_review_entry`, `fm_confirmation`, `fm_payload_builder`, `fm_api_submission`) are wired. `sr_status_sync_node` transitions the session into this stage when the platform signals `FM_MANAGER IN_PROGRESS`.
 
 ```python
 FM_REVIEW_STAGE = StageDefinition(
@@ -139,7 +139,7 @@ FM_REVIEW_STAGE = StageDefinition(
 )
 ```
 
-When implemented, this stage will accept `workflow_stage = "FM_REVIEW"` from a webhook or status poll, require the FM documents listed above, and route to a dedicated FM review agent.
+**Actions supported:** `save_fm_progress` (PATCH `status=IN_PROCESS`) and `approve_fm_review` (PATCH `status=APPROVED`). See `build_fm_review_payload` and `build_fm_approve_payload` in the Payload Structure section below.
 
 ---
 
@@ -149,7 +149,7 @@ The RDD (Real Estate Development Division) review stage is the final approval st
 
 **Stage key:** `RDD_REVIEW`  
 **Role:** `DD_ENGINEER`  
-**Status:** Schema fully defined; graph routing and agent nodes not yet implemented.
+**Status:** Fully implemented. Graph nodes (`rdd_review_entry`, `rdd_confirmation`, `rdd_payload_builder`, `rdd_api_submission`) are wired. `sr_status_sync_node` transitions the session into this stage when the platform signals `DD_ENGINEER IN_PROGRESS`.
 
 ```python
 RDD_REVIEW_STAGE = StageDefinition(
@@ -166,7 +166,7 @@ RDD_REVIEW_STAGE = StageDefinition(
 )
 ```
 
-The RDD validation enforces a date ordering constraint: `actual_handover_date ≤ fitout_start_date ≤ fitout_end_date ≤ trading_date`.
+**Action supported:** `submit_rdd_report` (POST `status=REPORT_SUBMITTED` with existing `service_request_id`). See `build_rdd_report_payload` in the Payload Structure section below.
 
 ---
 
@@ -274,42 +274,91 @@ The upload endpoint (`POST /api/v1/upload`) enforces:
 
 ## Payload Structure
 
-**Builder:** `app/services/payload_builder_service.py` → `build_create_handover_payload(collected_data)`
+**Builder:** `app/agents/services/payload_builder_service.py`
 
-The builder validates that all `_REQUIRED_DATA_KEYS` are present in `collected_data` before assembling the payload. These keys include all `CREATE_SR_STAGE.required_fields` plus additional keys resolved during lease lookup: `lease_brand_mall`, `contract_id`.
+All four builders are pure deterministic functions — no LLM calls, no I/O. They validate required keys before assembling the payload and raise `ValueError` with a descriptive message if any key is absent or empty.
 
-### Top-Level Payload Shape
+---
+
+### CREATE_SR — `build_create_handover_payload(data)`
+
+Required keys in `data` (all backend-derived except user-supplied fields): `mall`, `brand`, `lease_code`, `title`, `startDate`, `endDate`, `description`, `inspection_done_by`, `lease_brand_mall`, `unit_codes`, `contracted_area`, `city`, `brand_id`, `tenant_profile_id`, `contract_id`, `property_id`, `lease_id`.
+
+Full payload shape (exact match of what the function returns):
 
 ```json
 {
+  "payload": {
+    "mall": "Jawharat Jeddah",
+    "brand": "Under Armour",
+    "lease": "T0028604",
+    "notes": "",
+    "title": "handover-T0028604-unit-ready-for-handover",
+    "endDate": "2026-06-15",
+    "comments": "",
+    "startDate": "2026-06-01",
+    "attachments": "",
+    "description": "Unit ready for handover",
+    "documents_ids": [],
+    "guideLineLink": "",
+    "inspectionDoneBy": "FM_MANAGER",
+    "lease_brand_mall": "T0028604 - Under Armour - Jawharat Jeddah",
+    "inspection_done_by": "FM_MANAGER",
+    "document_status_map": [],
+    "unit_readiness_date": "",
+    "expected_handover_date": "",
+    "company_name": "116",
+    "tenant_contact": "",
+    "user_action": null,
+    "unit_codes": ["FF050"],
+    "contracted_area": 420,
+    "city": "Jeddah",
+    "brand_id": 123,
+    "tenant_profile_id": 116,
+    "contract_id": 456,
+    "property_id": 789,
+    "startDateLT": "01/06/2026 12:00 AM",
+    "endDateLT": "15/06/2026 12:00 AM"
+  },
+  "title": "handover-T0028604-unit-ready-for-handover",
+  "tenant_profile_id": 116,
+  "property_id": 789,
   "service_category": "FIT_OUT_AND_HANDOVER",
   "sub_category": "HANDOVER",
-  "lease_code": "LC-12345",
-  "lease_id": "uuid-...",
-  "tenant_profile_id": "uuid-...",
-  "property_id": "uuid-...",
-  "title": "Handover request for Unit A-101",
-  "service_request_id": "",
-  "payload": {
-    "inspectionDoneBy": "John Smith",
-    "company_name": "Tenant Brand Ltd.",
-    "description": "Handover request for fit-out completion...",
-    "startDate": "2026-06-01",
-    "endDate": "2026-06-15",
-    "comments": "All fit-out work completed per approved drawings.",
-    "mall": "Riyadh Park",
-    "brand": "Tenant Brand",
-    "lease": "LC-12345 / Unit A-101",
-    "unit_codes": ["A-101"],
-    "city": "Riyadh",
-    "contracted_area": 250.0
-  }
+  "lease_code": "T0028604",
+  "lease_id": 456,
+  "service_request_id": ""
 }
 ```
+
+Notes:
+- `inspectionDoneBy` and `inspection_done_by` are both sent (platform requires both spellings).
+- `startDateLT` / `endDateLT` are optional localised display variants; default to `""` when absent.
+- `company_name` is set to `str(tenant_profile_id)` (platform convention).
+- `documents_ids`, `document_status_map`, `guideLineLink`, `unit_readiness_date`, `expected_handover_date` are all empty/null at CREATE time — filled in during FM/RDD stages.
+- Top-level `status` is **not sent** during initial create.
 
 After a successful API response, `api_submission_node` extracts the returned `sr_id` and stores it in `backend_refs.sr_id`. It also sets:
 - `workflow_stage = "SR_CREATED"`
 - `status = "SUBMITTED"`
 - `state["service_request_id"] = sr_id`
 
-The `ConversationStateService.save_checkpoint` then persists the updated `ServiceRequestDraft` with `sr_id` and `service_request_status = "SUBMITTED"`.
+---
+
+### FM_REVIEW — `build_fm_review_payload(data, backend_refs)` and `build_fm_approve_payload(data, backend_refs, comment)`
+
+**Save progress** (`status=IN_PROCESS`): called when FM user clicks "Save Progress". Requires `unit_readiness_date` and `expected_handover_date` in `data`; `sr_id` and `uploaded_documents` (list of doc UUIDs) in `backend_refs`.
+
+**Approve** (`status=APPROVED`): same shape but with `status="APPROVED"` and optional `comment`. Top-level `lease_code` / `lease_id` are omitted per the Postman shape for approval.
+
+The payload carries the original `create_payload.payload` inner fields plus the FM-specific additions (`unit_readiness_date`, `expected_handover_date`, `documents_ids`, `document_status_map`, `document_saved: true`).
+
+---
+
+### RDD_REVIEW — `build_rdd_report_payload(data, backend_refs)`
+
+**Submit report** (`status=REPORT_SUBMITTED`): called when DD Engineer submits the handover report. Requires the four RDD date fields and `guideLineLink` in `data`; `sr_id`, `uploaded_documents` (FM doc IDs), and `rdd_document_id` in `backend_refs`.
+
+RDD date values are normalised from ISO (`YYYY-MM-DD`) to `DD/MM/YYYY` per the Postman collection shape. The `document_status_map` contains FM document entries (blank status) plus the RDD report entry (`document_status: "APPROVED"`).
+
+The RDD validation enforces a date ordering constraint: `actual_handover_date ≤ fitout_start_date ≤ fitout_end_date ≤ trading_date`.

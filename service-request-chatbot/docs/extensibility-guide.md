@@ -11,14 +11,14 @@ This document captures the extensibility analysis of the current architecture fo
 | Layer | Extensibility | Notes |
 |---|---|---|
 | Agent Registry | Excellent | One dict entry per new agent |
-| Schema / StageDefinition | Excellent | FM_REVIEW and RDD_REVIEW already defined |
+| Schema / StageDefinition | Excellent | FM_REVIEW and RDD_REVIEW already defined and wired |
 | Validation | Good | Stage-driven; FM/RDD rules already implemented |
 | Observability | Excellent | `@trace_node` decorator is fully generic |
 | Database | Excellent | `collected_data` is JSONB; no new migrations needed |
-| Supervisor intent routing | Moderate | Requires enum + prompt change |
-| Graph topology | Moderate | Routing functions hardcode `handover_entry` |
-| Field extraction | Moderate | Tied to `HandoverExtractedFields`; needs parameterization |
-| Payload builder | Moderate | One builder per agent type needed |
+| Supervisor intent routing | Moderate | Requires enum + prompt change for new intent |
+| Graph topology | Good | `_AGENT_ENTRY_NODES` dispatch dict exists; add entry + wire nodes |
+| Field extraction | Moderate | Tied to `HandoverExtractedFields`; needs parameterisation for new agent |
+| Payload builder | Good | Pattern established (4 builders exist); add new function + node |
 
 ---
 
@@ -90,38 +90,27 @@ intent: Literal[
     "UPDATE_HANDOVER_SERVICE_REQUEST",
     "APPROVE_HANDOVER_SERVICE_REQUEST",
     "CHECK_SERVICE_REQUEST_STATUS",
+    "PREVIEW_SERVICE_REQUEST",
     "UNKNOWN",
 ]
 ```
 
 **Required change:** Add the new intent value to the `Literal` and update the supervisor system prompt in `app/agents/prompts/supervisor_prompt.py`.
 
-### 2. Graph Routing Hardcodes `handover_entry`
+### 2. Graph Routing — `_AGENT_ENTRY_NODES` dispatch table ✅ Already implemented
 
 **File:** `app/agents/graph/service_request_graph.py`
 
-```python
-def _route_after_load(state):
-    return "handover_entry" if state.get("active_agent") else "supervisor"
-
-def _route_after_registry(state):
-    ...
-    return "handover_entry"
-```
-
-**Required change:** Make routing dynamic, dispatching to the appropriate entry node based on `active_agent`:
+The dispatch dict exists in the codebase:
 
 ```python
-_AGENT_ENTRY_NODES = {
+_AGENT_ENTRY_NODES: dict[str, str] = {
     "handover_service_request_agent": "handover_entry",
-    "fm_review_agent": "fm_review_entry",
-    # add new mappings here
+    # FM/RDD are stage-routed by workflow_stage after sr_status_sync
 }
-
-def _route_after_load(state):
-    agent = state.get("active_agent")
-    return _AGENT_ENTRY_NODES.get(agent, "supervisor") if agent else "supervisor"
 ```
+
+**Required change for new agent type:** Add a new entry to `_AGENT_ENTRY_NODES` and wire the entry node into the graph.
 
 ### 3. `_route_after_validation` Imports Directly from `handover_schema`
 
@@ -136,8 +125,8 @@ stage = state.get("workflow_stage") or "CREATE_SR"
 def _resolve_get_missing_fields(schema_key: str):
     if schema_key == "handover_service_request_schema":
         from app.agents.schemas.handover_schema import get_missing_fields
-    elif schema_key == "fm_review_schema":
-        from app.agents.schemas.fm_review_schema import get_missing_fields
+    elif schema_key == "new_agent_schema":
+        from app.agents.schemas.new_agent_schema import get_missing_fields
     return get_missing_fields
 ```
 
@@ -149,29 +138,35 @@ The service hardcodes `HandoverExtractedFields` and `HANDOVER_EXTRACTION_SYSTEM_
 
 **Required change:** Either make the service accept the schema class and prompt as constructor parameters, or have `field_extraction_node` dispatch to a different service class based on `state["schema_key"]`.
 
-### 5. `payload_builder_node` Is Handover-Specific
+### 5. `payload_builder_node` — Stage-specific builders already exist ✅ Already implemented
 
-**File:** `app/agents/graph/nodes/payload_builder_node.py`
+**File:** `app/agents/services/payload_builder_service.py`
 
-Calls `build_create_handover_payload` directly.
+Four builders now exist: `build_create_handover_payload`, `build_fm_review_payload`, `build_fm_approve_payload`, `build_rdd_report_payload`. Each has its own dedicated graph node (`payload_builder_node`, `fm_payload_builder_node`, `rdd_payload_builder_node`).
 
-**Required change:** Add a payload builder registry or dispatch based on `active_agent`/`workflow_stage`.
+**Required change for new agent type:** Add a new `build_{new_agent}_payload` function and a corresponding dedicated node wired into the graph.
 
 ---
 
 ## Extension Paths
 
-### Path A — FM Review and RDD Review Stages (Same Handover Agent)
+### Path A — FM Review and RDD Review Stages ✅ Already implemented
 
-These are lifecycle stages of the same Handover SR, not new agent types. The schema, validation rules, and document types are already defined. Steps to complete:
+These lifecycle stages of the Handover SR are fully wired in the graph. The following are already complete:
 
-1. **Add entry nodes** — `fm_review_entry_node.py` and `rdd_review_entry_node.py` (modelled on `handover_entry_node.py`).
-2. **Add graph edges** — from `workflow_stage = "SR_CREATED"` to the FM review pipeline after `api_submission_node`. Extend `_route_after_load` to route `workflow_stage = "FM_REVIEW"` / `"RDD_REVIEW"` to the correct entry node.
-3. **Add payload builders** — `build_fm_review_payload` and `build_rdd_review_payload` in `payload_builder_service.py`.
-4. **Webhook / status-poll trigger** — mechanism to transition the session's `workflow_stage` from `"SR_CREATED"` to `"FM_REVIEW"` when the SR advances in the external system.
-5. **Frontend components** — document upload UI for FM checklist / RDD report.
+1. ✅ **Entry nodes** — `fm_review_entry_node.py` and `rdd_review_entry_node.py`
+2. ✅ **Graph routing** — `sr_status_sync_node` maps platform `service_request_operations` to `workflow_stage`; `_route_after_sync` dispatches to `fm_review_entry` / `rdd_review_entry`
+3. ✅ **Payload builders** — `build_fm_review_payload`, `build_fm_approve_payload`, `build_rdd_report_payload` in `payload_builder_service.py`
+4. ✅ **Stage-specific confirmation nodes** — `fm_confirmation`, `rdd_confirmation`
+5. ✅ **Stage-specific submission nodes** — `fm_api_submission_node`, `rdd_api_submission_node`
 
-Effort estimate: **medium** — schema and validation are done; graph wiring + 2 entry nodes + 2 payload builders are the main work.
+**Still pending (what the incoming developer needs to complete):**
+- Real file upload wired to platform `PUT /files` (upload route is still a stub)
+- Status sync mapping needs validation against live platform `service_request_operations` shapes
+- Frontend document upload UI for FM checklist / RDD report (`DocumentRequirementCard` exists but upload flow is partial)
+- Structured UI actions beyond generic `confirm`/`cancel` (e.g. `save_fm_progress`, `approve_fm_review`, `submit_rdd_report`)
+
+See `gaps_and_pc/chatbot_postman_gap_implementation_plan.md` for the full gap closure checklist.
 
 ### Path B — New Agent Type (Different Service Category)
 

@@ -157,42 +157,73 @@ The graph is defined in `app/agents/graph/service_request_graph.py` and compiled
 ```mermaid
 flowchart TD
     START([START]) --> load_session
-    load_session -->|active_agent set| handover_entry
-    load_session -->|no active_agent| supervisor
 
-    supervisor -->|WAITING_FOR_USER| response_generation
-    supervisor -->|intent classified| registry
+    load_session -->|"preview intent detected"| supervisor
+    load_session -->|"sr_id in backend_refs"| sr_status_sync
+    load_session -->|"active_agent set (no sr_id)"| handover_entry
+    load_session -->|"no active_agent"| supervisor
 
-    registry -->|WAITING_FOR_USER| response_generation
-    registry -->|agent resolved| handover_entry
+    sr_status_sync -->|"FM_REVIEW"| fm_review_entry
+    sr_status_sync -->|"RDD_REVIEW"| rdd_review_entry
+    sr_status_sync -->|"SR_CREATED / SR_COMPLETED"| supervisor
+    sr_status_sync -->|"CREATE_SR"| handover_entry
 
-    handover_entry -->|workflow restart: active_agent cleared + WAITING_FOR_USER| response_generation
-    handover_entry -->|action_override=cancel| merge_state
-    handover_entry -->|normal turn| field_extraction
+    supervisor -->|"PREVIEW_SERVICE_REQUEST"| preview
+    supervisor -->|"WAITING_FOR_USER"| response_generation
+    supervisor -->|"intent classified"| registry
+
+    preview --> response_generation
+
+    registry -->|"WAITING_FOR_USER"| response_generation
+    registry -->|"agent resolved"| handover_entry
+
+    handover_entry -->|"workflow restarted"| response_generation
+    handover_entry -->|"action_override=cancel"| merge_state
+    handover_entry -->|"normal turn"| field_extraction
+
+    fm_review_entry -->|"WAITING_FOR_USER"| response_generation
+    fm_review_entry -->|"fm_action set"| merge_state
+    fm_review_entry -->|"normal turn"| field_extraction
+
+    rdd_review_entry -->|"WAITING_FOR_USER"| response_generation
+    rdd_review_entry -->|"rdd_action set"| merge_state
+    rdd_review_entry -->|"normal turn"| field_extraction
 
     field_extraction --> merge_state
 
-    merge_state -->|selected_lease set or lease_id missing| lease_lookup
-    merge_state -->|lease_id present| validation
+    merge_state -->|"lease_id missing"| lease_lookup
+    merge_state -->|"lease_id present"| validation
 
-    lease_lookup -->|WAITING_FOR_USER| response_generation
-    lease_lookup -->|lease resolved| validation
+    lease_lookup -->|"WAITING_FOR_USER"| response_generation
+    lease_lookup -->|"lease resolved"| validation
 
-    validation -->|blocking errors| missing_field
-    validation -->|fields incomplete| missing_field
-    validation -->|all valid + complete| confirmation
-
-    confirmation -->|CONFIRMED| payload_builder
-    confirmation -->|not CONFIRMED| response_generation
-
-    payload_builder --> api_submission
-
-    api_submission --> response_generation
+    validation -->|"blocking errors or missing fields"| missing_field
+    validation -->|"CREATE_SR all valid"| confirmation
+    validation -->|"FM_REVIEW all valid"| fm_confirmation
+    validation -->|"RDD_REVIEW all valid"| rdd_confirmation
+    validation -->|"terminal stage"| response_generation
 
     missing_field --> response_generation
 
-    response_generation --> save_state
+    confirmation -->|"CONFIRMED"| payload_builder
+    confirmation -->|"not CONFIRMED"| response_generation
 
+    fm_confirmation -->|"CONFIRMED"| fm_payload_builder
+    fm_confirmation -->|"not CONFIRMED"| response_generation
+
+    rdd_confirmation -->|"CONFIRMED"| rdd_payload_builder
+    rdd_confirmation -->|"not CONFIRMED"| response_generation
+
+    payload_builder --> api_submission
+    api_submission --> response_generation
+
+    fm_payload_builder --> fm_api_submission
+    fm_api_submission --> response_generation
+
+    rdd_payload_builder --> rdd_api_submission
+    rdd_api_submission --> response_generation
+
+    response_generation --> save_state
     save_state --> END([END])
 ```
 
@@ -342,4 +373,4 @@ graph LR
 
 **File Upload:** Route stub at `POST /api/v1/upload`. Enforces MIME allowlist (PDF/JPEG/PNG) and `PermissionService.ensure_can_create_request`. Does not yet persist bytes.
 
-**Authentication:** `HTTPBearer` optional header. Default `AuthContext` is `"anonymous"` with empty roles. `PermissionService` maps actions to required role strings; unknown actions currently fail-open.
+**Authentication:** `HTTPBearer` optional header. Default `AuthContext` is `"anonymous"` with empty roles. `PermissionService` (`app/agents/services/permission_service.py`) maps actions to required permission strings; unknown actions **fail-closed** — an unrecognised action raises `PermissionDeniedError` immediately.
