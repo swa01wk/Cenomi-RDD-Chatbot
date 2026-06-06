@@ -1263,3 +1263,262 @@ curl -s -X POST http://localhost:8000/api/chat/service-request \
     \"selected_lease_id\": \"t0208831\"
   }" | jq '{message, ui_type: .ui.type}'
 ```
+
+---
+
+---
+
+## 12. UPDATE / APPROVE / CHECK / PREVIEW Routing (Bug-Fix Regression Tests)
+
+> These tests target the four routing bugs found in session `061624fc-1741-4166-a59f-932454883fca`.  
+> Run each group as a **multi-turn conversation** (reuse `session_id` across turns).
+
+---
+
+### 12A — UPDATE intent: single-word opener must route correctly
+
+**Turn 1 (new session)**
+```
+update
+```
+**Expected:** Intent `UPDATE_HANDOVER_SERVICE_REQUEST`, `active_agent = handover_service_request_agent`, bot asks which SR to update.
+
+**Turn 2 (same session)**
+```
+yes i want to update the service request
+```
+**Expected:** Same intent confirmed, workflow stage advances, bot asks for the SR identifier or which field to change.
+
+---
+
+### 12B — UPDATE intent: short contextual follow-ups must not drop to UNKNOWN
+
+Start with "I want to update my handover service request", then send each of the following as a follow-up in the same session:
+
+```
+the inspection dates
+```
+```
+start inspection
+```
+```
+start date
+```
+```
+8th june
+```
+
+**Expected for each turn:** Intent stays `UPDATE_HANDOVER_SERVICE_REQUEST`, `active_agent` remains `handover_service_request_agent`, bot acknowledges the field/value and continues collecting — NOT the generic "create, update, approve, or check" clarification prompt.
+
+**Failure indicator (the bug):** Any turn where the bot resets to asking "would you like to create, update, approve, or check?" after the intent was already established.
+
+---
+
+### 12C — UPDATE intent: replication of session `061624fc` exact flow
+
+This is the verbatim turn sequence from the failing session. After the fix, every turn should advance the workflow, not loop.
+
+```
+hello
+```
+```
+update
+```
+```
+yes i want to update the service request
+```
+```
+the inspection dates
+```
+```
+start inspection
+```
+```
+start date
+```
+```
+8th june
+```
+```
+lets preview the service request
+```
+
+**Expected progression:**
+- Turns 1–2: clarification / intent established
+- Turn 3: `active_agent` set, update workflow starts
+- Turns 4–7: fields collected (inspection start date = 2026-06-08 recognised), `workflow_stage` advances
+- Turn 8: bot shows a summary / preview of collected update data — NOT a generic re-clarification
+
+---
+
+### 12D — APPROVE intent: single-message routing
+
+```
+I want to approve a handover service request
+```
+```
+approve the handover SR
+```
+```
+review and sign off the handover
+```
+
+**Expected:** Intent `APPROVE_HANDOVER_SERVICE_REQUEST`, `active_agent` set, bot asks for the SR reference to approve.
+
+---
+
+### 12E — APPROVE intent: short follow-up must keep context
+
+Start with "I want to approve a handover", then send:
+
+```
+approve
+```
+```
+yes go ahead
+```
+```
+sign off
+```
+
+**Expected:** Each turn stays on `APPROVE_HANDOVER_SERVICE_REQUEST` intent, bot does not reset.
+
+---
+
+### 12F — CHECK STATUS intent: routing and context retention
+
+```
+check the status of my service request
+```
+```
+what's the status of SR-12345?
+```
+```
+where is my handover request?
+```
+```
+track my SR
+```
+
+**Expected:** Intent `CHECK_SERVICE_REQUEST_STATUS`, `active_agent` set, bot asks for SR identifier if not provided.
+
+**Short follow-up in same session:**
+```
+status
+```
+```
+check it
+```
+**Expected:** Stays on CHECK intent, does not reset to clarification.
+
+---
+
+### 12G — PREVIEW intent: show current draft/collected data
+
+Within an active UPDATE or CREATE session (after some fields have been collected), send:
+
+```
+lets preview the service request
+```
+```
+show me what you have so far
+```
+```
+can you show it?
+```
+```
+preview
+```
+```
+what have we collected?
+```
+```
+show me the details
+```
+
+**Expected:** Bot renders a summary of currently collected fields (e.g. lease, dates, description) — NOT the generic "would you like to create, update, approve, or check?" prompt.
+
+**Failure indicator (the bug):** Bot responds with the generic clarification prompt when user has clearly asked to see the current state.
+
+---
+
+### 12H — Intent must NOT be overwritten by UNKNOWN on ambiguous follow-ups
+
+Start a session with a clear UPDATE intent, then send an ambiguous mid-workflow message:
+
+```
+I want to update the handover service request
+```
+then:
+```
+hmm
+```
+```
+let me think
+```
+```
+actually
+```
+
+**Expected:** Intent `UPDATE_HANDOVER_SERVICE_REQUEST` is preserved in session DB across these filler turns. Bot may ask for clarification but must not reset the intent — the next substantive message (e.g. "change the start date to 10 june") should continue in the UPDATE workflow without re-establishing intent from scratch.
+
+**Failure indicator (the bug):** After a filler turn, the bot's next message asks the user to re-state whether they want to create/update/approve/check.
+
+---
+
+### 12I — Intent switching: explicit cancel resets correctly, but implicit follow-ups do not
+
+```
+# Start an UPDATE session
+I want to update the handover service request
+
+# Explicit cancel — should reset
+start over
+
+# After reset: new intent should work cleanly
+create a new handover for Under Armour
+```
+
+**Expected:**
+- "start over" → `active_agent` cleared, `intent` cleared, bot confirms reset
+- "create a new handover..." → routes to `CREATE_HANDOVER_SERVICE_REQUEST` fresh
+
+---
+
+### 12J — curl: full UPDATE multi-turn flow (automated regression)
+
+```bash
+# Turn 1 — start update session
+SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"tester","message":"I want to update the handover service request"}' \
+  | jq -r '.session_id')
+
+echo "Session: $SESSION"
+
+# Turn 2 — short follow-up (was UNKNOWN before fix)
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"tester\",\"session_id\":\"$SESSION\",\"message\":\"the inspection dates\"}" \
+  | jq '{message, intent: .state.intent, agent: .state.active_agent}'
+
+# Turn 3 — even shorter (was UNKNOWN before fix)
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"tester\",\"session_id\":\"$SESSION\",\"message\":\"start date\"}" \
+  | jq '{message, intent: .state.intent, agent: .state.active_agent}'
+
+# Turn 4 — date value alone (was UNKNOWN 0.0 before fix)
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"tester\",\"session_id\":\"$SESSION\",\"message\":\"8th june\"}" \
+  | jq '{message, intent: .state.intent, agent: .state.active_agent}'
+
+# Turn 5 — preview request (was UNKNOWN before fix)
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"tester\",\"session_id\":\"$SESSION\",\"message\":\"lets preview the service request\"}" \
+  | jq '{message, intent: .state.intent}'
+```
+
+**Expected for all turns:** `intent` = `UPDATE_HANDOVER_SERVICE_REQUEST` (or `PREVIEW_SERVICE_REQUEST` on turn 5), `active_agent` = `handover_service_request_agent` from turn 1 onwards, no generic re-clarification message.

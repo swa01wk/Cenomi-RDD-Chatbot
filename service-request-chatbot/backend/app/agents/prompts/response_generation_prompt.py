@@ -12,7 +12,6 @@ into a natural, context-aware message for the user.
 FIELD_LABELS: dict[str, str] = {
     "lease_code": "lease code",
     "lease_brand_mall": "lease, brand, or mall",
-    "title": "title",
     "description": "description",
     "startDate": "inspection start date",
     "endDate": "inspection end date",
@@ -117,17 +116,46 @@ def build_response_generation_context(
     lines.append(f"Current task: {stage_label}")
     if intent:
         lines.append(f"User intent: {intent.replace('_', ' ').title()}")
+    if intent == "PREVIEW_SERVICE_REQUEST":
+        lines.append(
+            "NOTE: The user asked to PREVIEW the service request. "
+            "Render a clear, friendly summary of all data collected so far. "
+            "If no data has been collected, say so and offer to help."
+        )
     if confirmation_status:
         lines.append(f"Confirmation status: {confirmation_status}")
     if response_ui_type:
         lines.append(f"UI component being shown: {response_ui_type}")
     lines.append("")
 
+    # Fields that are internal / system-derived and must never be surfaced to
+    # the user — neither in the DATA COLLECTED block nor in STILL NEEDED.
+    # ``title`` is auto-generated from lease_code + description; the backend
+    # IDs (brand_id, lease_id, etc.) are lookup artefacts that have no meaning
+    # in a user-facing conversation.
+    _non_user_fields = {
+        "title",
+        "tenant_profile_id",
+        "property_id",
+        "lease_id",
+        "brand_id",
+        "contract_id",
+        "unit_codes",
+        "city",
+        "contracted_area",
+        "lease_brand_mall",
+        "lease",
+        "mall",
+        "brand",
+    }
+
     # ── 3. Data collected so far ─────────────────────────────────────────────
     if collected_data:
         readable_data: dict[str, str] = {}
         for k, v in collected_data.items():
             if v is None or v == "" or v == []:
+                continue
+            if k in _non_user_fields:
                 continue
             label = FIELD_LABELS.get(k, k)
             readable_data[label] = str(v) if not isinstance(v, list) else ", ".join(str(i) for i in v)
@@ -142,17 +170,6 @@ def build_response_generation_context(
     # response LLM focuses exclusively on asking the user to fix the invalid
     # value rather than also asking for other fields.
     if missing_fields and not validation_errors:
-        # Fields that are never user-supplied: backend-derived IDs and
-        # ``title`` which is auto-generated from lease_code + description.
-        # Showing ``title`` here causes the LLM to hallucinate draft titles in
-        # free-form text, which misleads users into thinking the value was
-        # accepted when it was never stored in the collected draft.
-        _non_user_fields = {
-            "tenant_profile_id", "property_id", "lease_id", "brand_id",
-            "contract_id", "unit_codes", "city", "contracted_area",
-            "lease_brand_mall", "lease", "mall", "brand",
-            "title",  # auto-generated — never collected from the user
-        }
         user_facing_missing = [
             FIELD_LABELS.get(f, f) for f in missing_fields
             if f not in _non_user_fields

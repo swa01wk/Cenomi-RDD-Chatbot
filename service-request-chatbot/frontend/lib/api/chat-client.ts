@@ -35,9 +35,17 @@ export async function postServiceRequestChat(
   // rendering hint at `data.ui`. Merge them so every ResponseUI variant has
   // a populated `message` field for the chat bubble.
   const responseUI = { ...data.ui, message: data.ui?.message ?? data.message } as ResponseUI;
+
+  // `draft_preview` is an always-fresh SR snapshot included by the backend
+  // whenever collected_data is non-empty and the SR is not yet submitted.
+  const draftPreview = data.draft_preview
+    ? ({ ...data.draft_preview, message: "" } as import("@/lib/types/chat").ResponseUISRPreviewCard)
+    : undefined;
+
   return {
     sessionId: data.session_id,
     traceId: data.trace_id ?? undefined,
     responseUI,
+    draftPreview,
   };
 }

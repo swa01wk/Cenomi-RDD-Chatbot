@@ -61,7 +61,8 @@ from app.agents.graph.nodes.registry_node import registry_node
 from app.agents.graph.nodes.response_generation_node import response_generation_node
 from app.agents.graph.nodes.save_state_node import save_state_node
 from app.agents.graph.nodes.sr_status_sync_node import sr_status_sync_node
-from app.agents.graph.nodes.supervisor_node import supervisor_node
+from app.agents.graph.nodes.preview_node import preview_node
+from app.agents.graph.nodes.supervisor_node import _user_wants_preview, supervisor_node
 from app.agents.graph.nodes.validation_node import validation_node
 from app.agents.graph.state import ServiceRequestGraphState
 
@@ -81,10 +82,22 @@ _AGENT_ENTRY_NODES: dict[str, str] = {
 
 
 def _route_after_load(state: dict[str, Any]) -> str:
-    """Route to sr_status_sync when an SR ID exists; otherwise skip to agent/supervisor."""
+    """Route to sr_status_sync when an SR ID exists; otherwise skip to agent/supervisor.
+
+    Preview and cancel/switch requests always route through the supervisor so
+    the LLM can classify PREVIEW_SERVICE_REQUEST (or re-route on cancel) even
+    when an active agent or a submitted SR ID is already set in session state.
+    """
+    user_message = state.get("user_message") or ""
+    # Always let the supervisor handle preview and workflow-switch phrases,
+    # regardless of whether sr_id or active_agent is set.
+    if _user_wants_preview(user_message):
+        return "supervisor"
+
     sr_id = (state.get("backend_refs") or {}).get("sr_id")
     if sr_id:
         return "sr_status_sync"
+
     agent = state.get("active_agent")
     if agent:
         return _AGENT_ENTRY_NODES.get(agent, "supervisor")
@@ -92,7 +105,13 @@ def _route_after_load(state: dict[str, Any]) -> str:
 
 
 def _route_after_sync(state: dict[str, Any]) -> str:
-    """After status sync, route to the correct stage entry node."""
+    """After status sync, route to the correct stage entry node.
+
+    Terminal post-submission stages (SR_CREATED, SR_COMPLETED) are not valid
+    collection stages.  Route them back through the supervisor so the user can
+    start a new request or trigger other intents (preview, check status, etc.)
+    rather than re-entering the handover collection pipeline with an unknown stage.
+    """
     workflow_stage: str = state.get("workflow_stage") or "CREATE_SR"
     agent = state.get("active_agent")
 
@@ -101,6 +120,10 @@ def _route_after_sync(state: dict[str, Any]) -> str:
     if workflow_stage == "RDD_REVIEW":
         return "rdd_review_entry"
 
+    # Post-submission terminal stages — go back to supervisor for the next intent.
+    if workflow_stage in ("SR_CREATED", "SR_COMPLETED"):
+        return "supervisor"
+
     # CREATE_SR path — route by active_agent
     if agent:
         return _AGENT_ENTRY_NODES.get(agent, "handover_entry")
@@ -108,7 +131,13 @@ def _route_after_sync(state: dict[str, Any]) -> str:
 
 
 def _route_after_supervisor(state: dict[str, Any]) -> str:
-    """Continue to registry on successful classification; short-circuit otherwise."""
+    """Continue to registry on successful classification; short-circuit otherwise.
+
+    PREVIEW_SERVICE_REQUEST is routed to the dedicated preview node which
+    fetches the live SR (if submitted) or summarises draft collected_data.
+    """
+    if state.get("intent") == "PREVIEW_SERVICE_REQUEST":
+        return "preview"
     if state.get("status") == "WAITING_FOR_USER":
         return "response_generation"
     return "registry"
@@ -140,7 +169,14 @@ def _route_after_lease(state: dict[str, Any]) -> str:
 
 
 def _route_after_validation(state: dict[str, Any]) -> str:
-    """Route to missing_field, or to the stage-appropriate confirmation node."""
+    """Route to missing_field, confirmation, or response_generation.
+
+    Terminal stages (SR_CREATED, SR_COMPLETED) short-circuit to
+    response_generation so the LLM can reply conversationally without
+    re-triggering the payload-builder / api-submission pipeline.  This
+    handles the case where a user sends a message (or inline correction)
+    on a session whose SR has already been submitted.
+    """
     from app.agents.schemas.handover_schema import get_missing_fields
 
     blocking = [
@@ -150,15 +186,21 @@ def _route_after_validation(state: dict[str, Any]) -> str:
     if blocking:
         return "missing_field"
 
-    stage = state.get("workflow_stage") or "CREATE_SR"
+    original_stage = state.get("workflow_stage") or "CREATE_SR"
+    _COLLECTION_STAGES = {"CREATE_SR", "FM_REVIEW", "RDD_REVIEW"}
+
+    # Terminal stages must not re-enter the submission pipeline.
+    if original_stage not in _COLLECTION_STAGES:
+        return "response_generation"
+
     collected = state.get("collected_data") or {}
-    if get_missing_fields(stage, collected):
+    if get_missing_fields(original_stage, collected):
         return "missing_field"
 
     # All clear — route to stage-specific confirmation
-    if stage == "FM_REVIEW":
+    if original_stage == "FM_REVIEW":
         return "fm_confirmation"
-    if stage == "RDD_REVIEW":
+    if original_stage == "RDD_REVIEW":
         return "rdd_confirmation"
     return "confirmation"
 
@@ -248,6 +290,7 @@ def build_service_request_graph():
     graph.add_node("load_session", load_session_node)
     graph.add_node("sr_status_sync", sr_status_sync_node)
     graph.add_node("supervisor", supervisor_node)
+    graph.add_node("preview", preview_node)
     graph.add_node("registry", registry_node)
     graph.add_node("handover_entry", handover_entry_node)
     graph.add_node("fm_review_entry", fm_review_entry_node)
@@ -297,8 +340,13 @@ def build_service_request_graph():
     graph.add_conditional_edges(
         "supervisor",
         _route_after_supervisor,
-        {"registry": "registry", "response_generation": "response_generation"},
+        {
+            "preview": "preview",
+            "registry": "registry",
+            "response_generation": "response_generation",
+        },
     )
+    graph.add_edge("preview", "response_generation")
     graph.add_conditional_edges(
         "registry",
         _route_after_registry,
@@ -357,6 +405,8 @@ def build_service_request_graph():
             "confirmation": "confirmation",
             "fm_confirmation": "fm_confirmation",
             "rdd_confirmation": "rdd_confirmation",
+            # Terminal stages (SR_CREATED, SR_COMPLETED) bypass submission entirely
+            "response_generation": "response_generation",
         },
     )
     graph.add_edge("missing_field", "response_generation")

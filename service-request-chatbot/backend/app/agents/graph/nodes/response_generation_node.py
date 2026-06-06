@@ -88,13 +88,13 @@ async def response_generation_node(state: ServiceRequestState) -> dict[str, Any]
         )
         llm_message = parsed.get("message") or None
         if llm_message:
-            logger.debug("response_generation_node.llm_success", preview=llm_message[:80])
+            logger.debug("response_generation_node.llm_success: %s", llm_message[:80])
         else:
-            logger.warning("response_generation_node.llm_empty_message", raw=parsed)
+            logger.warning("response_generation_node.llm_empty_message: %s", parsed)
     except json.JSONDecodeError as exc:
-        logger.warning("response_generation_node.llm_json_parse_failed", error=str(exc))
+        logger.warning("response_generation_node.llm_json_parse_failed: %s", exc)
     except Exception as exc:
-        logger.warning("response_generation_node.llm_call_failed", error=str(exc))
+        logger.warning("response_generation_node.llm_call_failed: %s", exc)
 
     # Fall back to the raw hint from prior nodes if LLM failed or returned nothing.
     final_message = llm_message or response_intent or _FALLBACK_RESPONSE

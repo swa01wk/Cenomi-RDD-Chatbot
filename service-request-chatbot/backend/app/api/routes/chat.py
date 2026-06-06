@@ -125,6 +125,15 @@ class ServiceRequestChatResponse(BaseModel):
         default_factory=lambda: {"type": "message"},
         description="UI rendering hint emitted by the graph (message, form, selection, etc.).",
     )
+    draft_preview: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Current draft SR snapshot (type='sr_preview_card').  "
+            "Present on every turn where collected_data is non-empty and the SR "
+            "has not yet been submitted.  Allows the frontend to keep its preview "
+            "card in sync even when `ui` is a plain message or confirmation type."
+        ),
+    )
     state: ChatStatePayload
     trace_id: str | None = Field(
         default=None,
@@ -190,6 +199,7 @@ async def post_service_request_chat(
         active_agent=result.active_agent,
         message=result.message,
         ui=result.ui,
+        draft_preview=result.draft_preview,
         state=ChatStatePayload(
             intent=result.state.intent,
             workflow_stage=result.state.workflow_stage,

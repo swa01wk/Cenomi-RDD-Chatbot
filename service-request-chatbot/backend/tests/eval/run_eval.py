@@ -310,9 +310,17 @@ async def run_scenario(
     return result
 
 
+_LATENCY_WARN_MS = 15_000  # warn when a single turn exceeds 15 seconds
+
+
 def _print_turn_verbose(tr: TurnResult, spec: Turn) -> None:
     icon = green("✓") if tr.passed else red("✗")
-    meta = f"{dim(f'{tr.latency_ms}ms')}"
+    latency_str = (
+        yellow(f"{tr.latency_ms}ms ⚠ slow")
+        if tr.latency_ms > _LATENCY_WARN_MS
+        else dim(f"{tr.latency_ms}ms")
+    )
+    meta = latency_str
     if tr.sr_reference:
         meta += f"  {dim('ref=' + tr.sr_reference)}"
     print(f"      {icon} Turn {tr.turn_idx}: {dim(spec.note)}  {meta}")
@@ -384,10 +392,15 @@ def _print_report(results: list[ScenarioResult], elapsed: float) -> None:
                 print(f"    {icon} Turn {tr.turn_idx}: {dim(tr.note)}")
                 print(f"        {red('ERROR')} {tr.http_error}")
             else:
+                latency_tag = (
+                    yellow(f"({tr.latency_ms}ms ⚠ slow)")
+                    if tr.latency_ms > _LATENCY_WARN_MS
+                    else dim(f"({tr.latency_ms}ms)")
+                )
                 print(
                     f"    {icon} Turn {tr.turn_idx}: "
                     f"{dim(tr.note)}  "
-                    f"{dim(f'({tr.latency_ms}ms)')}{extra_str}"
+                    f"{latency_tag}{extra_str}"
                 )
                 for f in tr.failures:
                     print(f"        {red('FAIL')} {f}")
@@ -432,6 +445,22 @@ def _print_report(results: list[ScenarioResult], elapsed: float) -> None:
                         f"  {red('✗')} Scenario {res.scenario.id} ({res.scenario.name}) "
                         f"— Turn {first_fail.turn_idx}: {desc}"
                     )
+
+    # ── Slow-turn summary ─────────────────────────────────────────────────────
+    slow_turns = [
+        (res.scenario.id, res.scenario.name, tr)
+        for res in results
+        for tr in res.turn_results
+        if tr.latency_ms > _LATENCY_WARN_MS
+    ]
+    if slow_turns:
+        print()
+        print(yellow(f"  ⚠ SLOW TURNS (>{_LATENCY_WARN_MS // 1000}s threshold):"))
+        for sc_id, sc_name, tr in slow_turns:
+            print(
+                f"    S{sc_id} Turn {tr.turn_idx} — {dim(tr.note)}: "
+                f"{yellow(f'{tr.latency_ms}ms')}"
+            )
 
     print(bold(_HDR) + "\n")
 

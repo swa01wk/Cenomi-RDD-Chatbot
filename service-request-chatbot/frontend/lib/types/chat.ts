@@ -80,13 +80,34 @@ export type ResponseUIDocumentRequirement = {
   documents: DocumentItem[];
 };
 
+// A read-only field row in the SR preview card (no editable flag — always display-only).
+export type PreviewField = {
+  key: string;
+  label: string;
+  value: string | null;
+};
+
+export type ResponseUISRPreviewCard = {
+  type: "sr_preview_card";
+  message: string;
+  requestType: string;
+  /** Platform-assigned SR ID — present only when the SR has been submitted. */
+  srId: string | null;
+  /** Platform status string e.g. "SUBMITTED", "IN_PROCESS", "DRAFT". */
+  status: string | null;
+  /** True when the SR has been submitted to the platform and sr_id is a real ID. */
+  isSubmitted: boolean;
+  fields: PreviewField[];
+};
+
 export type ResponseUI =
   | ResponseUIMessage
   | ResponseUILeaseSelection
   | ResponseUIConfirmationCard
   | ResponseUIValidationError
   | ResponseUIWorkflowProgress
-  | ResponseUIDocumentRequirement;
+  | ResponseUIDocumentRequirement
+  | ResponseUISRPreviewCard;
 
 // ─── API contract ─────────────────────────────────────────────────────────────
 
@@ -103,6 +124,13 @@ export type ChatServiceResponse = {
   sessionId: string;
   traceId?: string;
   responseUI: ResponseUI;
+  /**
+   * Always-fresh draft SR snapshot emitted by the backend on every turn where
+   * collected_data is non-empty and the SR has not yet been submitted.
+   * Use this to keep the SR preview card in sync even when responseUI is a
+   * plain message or confirmation type.
+   */
+  draftPreview?: ResponseUISRPreviewCard;
 };
 
 // ─── Local UI message ─────────────────────────────────────────────────────────

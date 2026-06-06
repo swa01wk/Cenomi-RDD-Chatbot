@@ -64,6 +64,7 @@ class ChatTurnResult:
     ui: dict[str, Any]
     state: ChatTurnState
     trace_id: UUID | None
+    draft_preview: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +324,25 @@ class ChatOrchestrationService:
         missing_fields: list[str] = result_state.get("missing_fields") or []
         ready_to_submit = graph_status in ("READY_TO_SUBMIT", "SUBMITTED")
 
+        # Build a preview snapshot from collected_data on every turn.
+        # Sent alongside every response so the frontend keeps its SR preview card
+        # in sync regardless of the primary response_ui type.
+        # When sr_id is present the card is marked isSubmitted=True so the
+        # frontend disables the Edit button on an already-submitted SR.
+        collected = result_state.get("collected_data") or {}
+        sr_id = (result_state.get("backend_refs") or {}).get("sr_id")
+        draft_preview: dict[str, Any] | None = None
+        if collected:
+            from app.agents.graph.nodes.preview_node import _fields_from_collected
+            draft_preview = {
+                "type": "sr_preview_card",
+                "requestType": "Handover Service Request",
+                "srId": sr_id,
+                "status": "SUBMITTED" if sr_id else "DRAFT",
+                "isSubmitted": bool(sr_id),
+                "fields": _fields_from_collected(collected),
+            }
+
         return ChatTurnResult(
             session_id=session_uuid,
             active_agent=active_agent,
@@ -335,6 +355,7 @@ class ChatOrchestrationService:
                 ready_to_submit=ready_to_submit,
             ),
             trace_id=trace_id,
+            draft_preview=draft_preview,
         )
 
     # ------------------------------------------------------------------
@@ -383,7 +404,15 @@ class ChatOrchestrationService:
             updates["active_agent"] = new_agent
 
         new_intent = result_state.get("intent")
-        if new_intent != chat_session.intent:
+        # Never overwrite a meaningful, established intent with UNKNOWN.
+        # UNKNOWN is only a transient "clarification needed" signal — persisting
+        # it would cause the next turn to start cold and re-ask the user to
+        # re-state their intent even mid-workflow.
+        # Intent is cleared legitimately via explicit cancel/restart actions
+        # (handover_entry_node writes intent=None), which is handled by the
+        # new_agent != chat_session.active_agent guard above flushing that state.
+        is_unknown = (new_intent or "").upper() == "UNKNOWN"
+        if new_intent != chat_session.intent and not is_unknown:
             updates["intent"] = new_intent
 
         new_stage = result_state.get("workflow_stage")

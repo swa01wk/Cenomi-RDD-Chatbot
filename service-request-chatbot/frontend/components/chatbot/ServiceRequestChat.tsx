@@ -8,12 +8,14 @@ import { ServiceRequestSummaryCard } from "./ServiceRequestSummaryCard";
 import { FieldCorrectionPanel } from "./FieldCorrectionPanel";
 import { LeaseSelectionCard } from "./LeaseSelectionCard";
 import { DocumentRequirementCard } from "./DocumentRequirementCard";
+import { SRPreviewCard } from "./SRPreviewCard";
 import { postServiceRequestChat } from "@/lib/api/chat-client";
 import type {
   ChatMessage,
   ResponseUI,
   ResponseUIConfirmationCard,
   ResponseUILeaseSelection,
+  ResponseUISRPreviewCard,
   WorkflowStep,
 } from "@/lib/types/chat";
 
@@ -53,6 +55,10 @@ export function ServiceRequestChat() {
   const [debugMode, setDebugMode] = useState(false);
   const [latestUI, setLatestUI] = useState<ResponseUI | null>(null);
   const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>(DEFAULT_STEPS);
+  // Persists the most recent SR draft preview across all turns, regardless of
+  // what responseUI type the current turn returned.  Updated from draftPreview
+  // (authoritative backend snapshot) or from responseUI when it is sr_preview_card.
+  const [latestSRPreview, setLatestSRPreview] = useState<ResponseUISRPreviewCard | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +110,15 @@ export function ServiceRequestChat() {
         }
 
         setLatestUI(res.responseUI);
+
+        // Keep the SR preview in sync on every turn.
+        // draftPreview is an authoritative snapshot from the backend; fall back
+        // to responseUI itself when the turn directly returned a preview card.
+        if (res.draftPreview) {
+          setLatestSRPreview(res.draftPreview);
+        } else if (res.responseUI.type === "sr_preview_card") {
+          setLatestSRPreview(res.responseUI as ResponseUISRPreviewCard);
+        }
 
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
@@ -218,6 +233,7 @@ export function ServiceRequestChat() {
               {messages.map((m, idx) => {
                 const isLastMsg = idx === messages.length - 1;
                 const isConfirmCard = m.role === "assistant" && m.responseUI?.type === "confirmation_card";
+                const isPreviewCard = m.role === "assistant" && m.responseUI?.type === "sr_preview_card";
                 return (
                   <div key={m.id}>
                     <MessageBubble
@@ -233,6 +249,21 @@ export function ServiceRequestChat() {
                           onConfirm={handleConfirm}
                           onCancel={handleCancel}
                           readOnly={!isLastMsg}
+                        />
+                      </div>
+                    )}
+                    {isPreviewCard && (
+                      <div className="mt-2">
+                        {/* Use latestSRPreview so the card reflects field updates
+                            made in subsequent turns; only the last card is editable
+                            and only when the SR has not yet been submitted. */}
+                        <SRPreviewCard
+                          data={latestSRPreview ?? (m.responseUI as ResponseUISRPreviewCard)}
+                          onSave={
+                            isLastMsg && !(latestSRPreview?.isSubmitted)
+                              ? handleCorrections
+                              : undefined
+                          }
                         />
                       </div>
                     )}
@@ -270,6 +301,17 @@ export function ServiceRequestChat() {
 
         {sidebarUI?.type === "document_requirement" && (
           <DocumentRequirementCard data={sidebarUI} />
+        )}
+
+        {/* Always render the latest SR draft/submitted preview when available.
+            latestSRPreview persists across turns so the card stays visible
+            even when the current responseUI is a plain message type.
+            onSave is only wired for drafts; submitted SRs are read-only. */}
+        {latestSRPreview && (
+          <SRPreviewCard
+            data={latestSRPreview}
+            onSave={latestSRPreview.isSubmitted ? undefined : handleCorrections}
+          />
         )}
 
         {/* Session debug panel */}

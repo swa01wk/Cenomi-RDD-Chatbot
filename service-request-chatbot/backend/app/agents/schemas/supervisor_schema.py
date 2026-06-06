@@ -24,6 +24,7 @@ class SupervisorDecision(BaseModel):
         "UPDATE_HANDOVER_SERVICE_REQUEST",
         "APPROVE_HANDOVER_SERVICE_REQUEST",
         "CHECK_SERVICE_REQUEST_STATUS",
+        "PREVIEW_SERVICE_REQUEST",
         "UNKNOWN",
     ] = Field(description="Classified user intent")
 

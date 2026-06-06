@@ -55,6 +55,16 @@ class ConversationStateService:
                 result["confirmation_status"] = confirmation_status
             if selected_lease is not None:
                 result["selected_lease"] = selected_lease
+
+            # Restore submitted SR identity into backend_refs so that
+            # sr_status_sync routing and the preview node can access the
+            # platform-assigned SR ID across turns without re-querying the DB.
+            if draft.sr_id:
+                backend_refs: dict[str, Any] = {"sr_id": draft.sr_id}
+                if draft.service_request_status:
+                    backend_refs["service_request_status"] = draft.service_request_status
+                result["backend_refs"] = backend_refs
+
             return result
         except Exception:
             log.exception("conversation_state_service.load.failed", session_id=str(session_id))

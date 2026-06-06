@@ -1,5 +1,20 @@
 # Handover Workflow
 
+## Essential Reading
+
+The sections in this document reference concepts, nodes, and rules that are defined in detail across the docs listed below. Read these alongside this file — the cross-references below indicate exactly where each companion doc is needed.
+
+| Doc | Why it is needed for this file |
+|-----|-------------------------------|
+| [`agent-design.md`](agent-design.md) | **Most important companion.** Defines every graph node referenced in the CREATE_SR sequence diagram (`supervisor_node`, `field_extraction_node`, `merge_state_node`, `lease_lookup_node`, `validation_node`, `confirmation_node`, `payload_builder_node`, `api_submission_node`). Also covers the full routing flowchart, `ServiceRequestGraphState` type, `handover_entry_node` confirmation parsing, and the agent registry. Without this, the sequence diagram has no implementation context. |
+| [`security-guardrails.md`](security-guardrails.md) | Required for three specific sections here: (1) the **Injection Guard** step in the CREATE_SR sequence diagram — explains `scan_message()`, risk scoring, and what happens on detection; (2) the **Backend-Derived Field Protection** in the Required Fields section — explains `BACKEND_PROTECTED_FIELDS`, the `HandoverExtractedFields` Pydantic validator, and the confidence threshold; (3) the **Confirmation Enforcement** section — explains the two-layer confirmation guard (`handover_entry_node` keyword matching + `api_submission_node` hard guards). |
+| [`architecture.md`](architecture.md) | Provides the system-level context for this workflow — how the LangGraph graph sits inside FastAPI, how `ChatOrchestrationService` orchestrates the turn, the DB schema for `service_request_drafts` (where `collected_data` is persisted), and the integration diagram showing the chatbot's relationship to the Cenomi Lease-Tenant API and Service Request API. |
+| [`api-reference.md`](api-reference.md) | Covers the two external-facing endpoints directly referenced here: (1) `POST /api/chat/service-request` — the chat endpoint that triggers the CREATE_SR graph run; (2) `POST /api/v1/upload` — the upload endpoint referenced in the Required Documents section (MIME validation, document type enforcement). |
+| [`extensibility-guide.md`](extensibility-guide.md) | Essential for the **FM Workflow** and **RDD Workflow** sections, both of which are marked *"graph routing and agent nodes not yet implemented"*. The extensibility guide describes Path A (FM/RDD as lifecycle stages of the same Handover agent) and lists the exact files and steps needed to wire these stages: entry nodes, graph edges, payload builders, and the frontend document upload components. |
+| [`debugging-guide.md`](debugging-guide.md) | Useful when troubleshooting issues that arise in this workflow — specifically: lease lookup failures (lease not found / multiple matches), validation errors not clearing, missing fields appearing despite user providing them, and payload builder errors. References the SQL queries needed to inspect `service_request_drafts.collected_data` at each stage. |
+
+---
+
 ## Overview
 
 The chatbot currently supports one fully-implemented workflow: **CREATE_SR** (Create Handover Service Request). Two additional stages — FM Review and RDD Review — are defined in the schema as placeholders for future implementation.
