@@ -116,6 +116,10 @@ def _build_user_content(state: ServiceRequestState) -> str:
     message = state.get("user_message") or ""
     parts = [f"User message: {message}"]
 
+    user_role = state.get("user_role") or (state.get("backend_refs") or {}).get("user_role")
+    if user_role:
+        parts.append(f"Current user role: {user_role}")
+
     active_agent = state.get("active_agent")
     if active_agent:
         parts.append(f"Currently active agent: {active_agent}")
@@ -198,10 +202,19 @@ async def supervisor_node(state: ServiceRequestState) -> dict[str, Any]:  # noqa
     # ── 1. Session continuity ──────────────────────────────────────────────
     # If a downstream agent is already handling this session and the user has
     # not explicitly requested a switch or a preview, delegate back immediately.
+    #
+    # Exception: terminal stages (SR_CREATED, SR_COMPLETED) indicate the prior
+    # SR is fully submitted.  The user may be starting a NEW request, so always
+    # run the LLM classification rather than blindly continuing with the stale
+    # active_agent.  The handover_entry_node will reset state as needed.
+    _TERMINAL_STAGES: frozenset[str] = frozenset({"SR_CREATED", "SR_COMPLETED"})
+    workflow_stage: str | None = state.get("workflow_stage")
+
     if (
         active_agent
         and not _user_wants_to_switch(user_message)
         and not _user_wants_preview(user_message)
+        and workflow_stage not in _TERMINAL_STAGES
     ):
         log.debug(
             "supervisor.session_continuity",

@@ -98,19 +98,20 @@ The handover agent is not a separate class — it is the collection of nodes tha
 | `fm_review_entry_node` | `nodes/fm_review_entry_node.py` | `AGENT` | FM_REVIEW stage boundary — role check, upload handling, action dispatch |
 | `rdd_review_entry_node` | `nodes/rdd_review_entry_node.py` | `AGENT` | RDD_REVIEW stage boundary — role check, upload handling, action dispatch |
 | `field_extraction_node` | `nodes/field_extraction_node.py` | `AGENT` | LLM field extraction via `FieldExtractionService` |
-| `merge_state_node` | `nodes/merge_state_node.py` | `CHAIN` | Merge extracted fields into `collected_data`; protect backend fields; auto-generate title |
+| `merge_state_node` | `nodes/merge_state_node.py` | `CHAIN` | Merge extracted fields into `collected_data`; protect backend fields; auto-generate title; auto-compute `expected_handover_date` for FM_REVIEW |
 | `lease_lookup_node` | `nodes/lease_lookup_node.py` | `TOOL` | Resolve tenant lease from Lease-Tenant API |
 | `validation_node` | `nodes/validation_node.py` | `AGENT` | `ValidationService` — required fields, types, constraints |
 | `missing_field_node` | `nodes/missing_field_node.py` | `AGENT` | Generate next clarifying question |
 | `confirmation_node` | `nodes/confirmation_node.py` | `AGENT` | CREATE_SR — build `confirmation_card` UI, set `confirmation_status = PENDING` |
 | `fm_confirmation` | `nodes/confirmation_node.py` (shared) | `AGENT` | FM_REVIEW — same node, routes to `fm_payload_builder` on CONFIRMED |
 | `rdd_confirmation` | `nodes/confirmation_node.py` (shared) | `AGENT` | RDD_REVIEW — same node, routes to `rdd_payload_builder` on CONFIRMED |
+| `document_upload_node` | `nodes/document_upload_node.py` | `CHAIN` | Bridges `state["documents"]` → `backend_refs["uploaded_documents"]` (FM) and `backend_refs["rdd_document_id"]` (RDD); runs between confirmation gate and payload builder |
 | `payload_builder_node` | `nodes/payload_builder_node.py` | `AGENT` | `build_create_handover_payload` → `backend_refs.create_payload` |
 | `fm_payload_builder_node` | `nodes/fm_payload_builder_node.py` | `AGENT` | `build_fm_review_payload` / `build_fm_approve_payload` → `backend_refs.fm_payload` |
-| `rdd_payload_builder_node` | `nodes/rdd_payload_builder_node.py` | `AGENT` | `build_rdd_report_payload` → `backend_refs.rdd_payload` |
+| `rdd_payload_builder_node` | `nodes/rdd_payload_builder_node.py` | `AGENT` | `build_rdd_report_payload` (submit) or `build_rdd_approve_payload` (final approve) → `backend_refs.rdd_payload` |
 | `api_submission_node` | `nodes/api_submission_node.py` | `TOOL` | POST `/service-requests` — CREATE_SR |
 | `fm_api_submission_node` | `nodes/fm_api_submission_node.py` | `TOOL` | PATCH `/service-requests/{sr_id}` — FM save-progress or approve |
-| `rdd_api_submission_node` | `nodes/rdd_api_submission_node.py` | `TOOL` | POST `/service-requests` with `status=REPORT_SUBMITTED` — RDD submit |
+| `rdd_api_submission_node` | `nodes/rdd_api_submission_node.py` | `TOOL` | POST with `status=REPORT_SUBMITTED` (submit) or PATCH with `status=APPROVED` (final approve); sets `workflow_stage=SR_COMPLETED` on final approval |
 | `response_generation_node` | `nodes/response_generation_node.py` | `AGENT` | LLM generates natural-language response; sets `WAITING_FOR_USER` |
 | `save_state_node` | `nodes/save_state_node.py` | — | `ConversationStateService.save_checkpoint` |
 
@@ -127,6 +128,8 @@ class ServiceRequestGraphState(TypedDict, total=False):
     # Session identity
     session_id: str
     user_id: str
+    user_role: str | None         # "MALL_MANAGER" | "FM_MANAGER" | "OPERATIONS" | "DD_ENGINEER"
+    auth: Any                     # AuthContext(roles=frozenset) — built from user_role by orchestration layer
     user_message: str             # current user message (field name is user_message, not message)
     attachments: list[dict]       # uploaded file attachment metadata
     trace_id: str                 # observability trace ID for this turn
@@ -160,7 +163,14 @@ class ServiceRequestGraphState(TypedDict, total=False):
     confirmation_status: str | None  # None | "PENDING" | "CONFIRMED" | "REJECTED"
 
     # Submission
-    backend_refs: dict            # {"create_payload": {...}, "sr_id": "..."}
+    backend_refs: dict            # Grows across lifecycle stages:
+                                  # CREATE_SR:  {"create_payload": {...}, "sr_id": "...",
+                                  #              "tenant_profile_id": "...", "property_id": "...",
+                                  #              "user_role": "..."}
+                                  # FM_REVIEW:  + {"uploaded_documents": [...], "fm_status": "APPROVED"}
+                                  # RDD_REVIEW: + {"rdd_document_id": "...",
+                                  #               "rdd_action": "submit"|"final_approve",
+                                  #               "rdd_status": "REPORT_SUBMITTED"|"APPROVED"}
     validation_errors: list[dict] # [{"field": str, "validation_type": str,
                                   #   "status": str, "message": str, "blocking": bool}]
 
@@ -179,11 +189,35 @@ class ServiceRequestGraphState(TypedDict, total=False):
 
 **Key invariants:**
 
-- `collected_data` only contains fields that passed `merge_state_node` validation (backend-protected fields cannot be overwritten by LLM extraction).
+- `collected_data` only contains fields that passed `merge_state_node` validation (backend-protected fields cannot be overwritten by LLM extraction). It accumulates across all three stages — Stage 1 fields remain readable in Stages 2 and 3.
 - `extracted_fields` uses the rich shape `{field_name: {"value": str, "confidence": float}}` set by `field_extraction_node`; consumed and cleared by `merge_state_node`.
 - `backend_refs.create_payload` is set only by `payload_builder_node` and is the authoritative payload POSTed to the SR API.
 - `action_override` and `corrected_fields` are injected from the HTTP request body and intentionally not saved to the DB by `save_state_node`.
+- `user_role` and `auth` are injected by `ChatOrchestrationService` into `initial_state` each turn; `user_role` is also stored in `backend_refs["user_role"]` so it persists across turns.
 - `confirmation_status` uses `"REJECTED"` (not `"DENIED"`) for declined confirmations.
+- `expected_handover_date` is never extracted from user input — it is auto-computed by `merge_state_node` as `unit_readiness_date + 7 calendar days` when `workflow_stage == "FM_REVIEW"`.
+
+---
+
+## Stage-to-Stage Data Contract
+
+The full `ServiceRequestGraphState` (including `collected_data` and `backend_refs`) is written to PostgreSQL by `save_state_node` at the end of every turn and reloaded by `load_session_node` at the start of the next. This means data collected in Stage 1 is naturally available in Stage 2, and Stage 2 data is available in Stage 3 — no explicit handover step is needed. The table below documents the exact contract.
+
+```
+Stage 1 (CREATE_SR) ──save──> PostgreSQL ──load──> Stage 2 (FM_REVIEW) ──save──> PostgreSQL ──load──> Stage 3 (RDD_REVIEW)
+```
+
+### What each stage reads and writes
+
+| Stage | Reads from prior stage | Writes for next stage |
+|---|---|---|
+| **CREATE_SR** | — | `collected_data`: lease fields, unit_code, description, title<br>`backend_refs`: sr_id, tenant_profile_id, property_id, user_role |
+| **FM_REVIEW** | All CREATE_SR `collected_data` (read-only)<br>`backend_refs.sr_id`, `.tenant_profile_id`, `.property_id` | `collected_data`: unit_readiness_date, expected_handover_date (auto-computed)<br>`backend_refs`: uploaded_documents, fm_status |
+| **RDD_REVIEW** | All CREATE_SR + FM_REVIEW `collected_data` (read-only)<br>`backend_refs.sr_id` + FM refs | `collected_data`: handover_meeting_date, technical_handover_date, commercial_handover_date, contractual_handover_date<br>`backend_refs`: rdd_document_id, rdd_action, rdd_status |
+
+### Reviewer context surface
+
+When a reviewer opens the chatbot at Stage 2 or 3, the `ChatStatePayload` response includes `collected_data` in full. The frontend `StageContextPanel` uses this to render a collapsible read-only summary of prior-stage data — no separate API call is needed.
 
 ---
 
@@ -255,11 +289,14 @@ flowchart TD
     CN -->|"CONFIRMED"| PB["payload_builder"]
     CN -->|"not CONFIRMED"| RG
 
-    FC -->|"CONFIRMED"| FPB["fm_payload_builder"]
+    FC -->|"CONFIRMED"| DU["document_upload"]
     FC -->|"not CONFIRMED"| RG
 
-    RC -->|"CONFIRMED"| RPB["rdd_payload_builder"]
+    RC -->|"CONFIRMED"| DU
     RC -->|"not CONFIRMED"| RG
+
+    DU -->|"FM_REVIEW"| FPB["fm_payload_builder"]
+    DU -->|"RDD_REVIEW"| RPB["rdd_payload_builder"]
 
     PB --> AS["api_submission"]
     AS --> RG

@@ -66,6 +66,16 @@ class Turn:
     expect_field_value: Optional[dict] = None
     """Soft: {label: expected_value} — check ui.fields entries on a confirmation_card."""
 
+    # ── Role-aware / lifecycle eval extensions ────────────────────────────────
+    user_role: Optional[str] = None
+    """Role to include in the user_role field of the API request payload."""
+
+    expect_rdd_status: Optional[str] = None
+    """Hard: assert state.rdd_status equals this value. None = skip check."""
+
+    expect_sr_id_present: bool = False
+    """Soft: assert a non-null sr_id is returned (in draft_preview or state)."""
+
 
 @dataclass
 class Scenario:
@@ -1181,7 +1191,7 @@ _S27 = Scenario(
     ),
     turns=[
         Turn(
-            "Handover SR for t0105712 – description: Pre-opening check, inspection from June 10 to June 12 2026",
+            "Handover SR for t0105712 – description: Pre-opening check, inspection from August 10 to August 12 2026",
             "Lease, description, startDate, endDate extracted; bot asks ONLY for inspector",
             expect_keywords=["inspect", "fm manager", "operations", "who", "perform", "done by"],
         ),
@@ -1220,7 +1230,7 @@ _S28 = Scenario(
             expect_keywords=["comment", "additional", "note", "anything", "remarks"],
         ),
         Turn(
-            "Tenant access confirmed for August 1",
+            "Tenant gets access from August 1",
             "Comments stored; confirmation card shown",
             expect_ui_type="confirmation_card",
         ),
@@ -1451,6 +1461,131 @@ _S33 = Scenario(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Scenario 34 — FM Manager Review (FM_REVIEW → FM Approved)
+# ─────────────────────────────────────────────────────────────────────────────
+# Prerequisites: backend must have a session with an SR in FM_REVIEW stage.
+# Run this scenario against a backend where the platform API mock returns
+# FM_REVIEW operations for the seeded sr_id.
+#
+# Because the eval hits a live backend, this scenario starts a fresh session
+# and exercises the FM role's conversation flow.  The workflow_stage assertion
+# is intentionally relaxed — the test validates language and response shape
+# rather than platform API outcome (which depends on mock configuration).
+# ─────────────────────────────────────────────────────────────────────────────
+_S34 = Scenario(
+    id=34,
+    name="FM Manager Review — Inspection Guidance and Approval Flow",
+    goal=(
+        "FM Manager sends a message with user_role=FM_MANAGER; bot responds with "
+        "FM-specific inspection language (checklist, readiness date, upload docs). "
+        "Provide unit_readiness_date and verify expected_handover_date is auto-shown (+7 days). "
+        "Send approve action and verify bot confirms with approval language."
+    ),
+    turns=[
+        Turn(
+            message="I have completed the site inspection for the unit",
+            note="FM Manager greets — bot should respond with FM inspection guidance, not generic",
+            user_role="FM_MANAGER",
+            expect_keywords=["inspection", "readiness", "checklist", "upload", "survey", "documents"],
+        ),
+        Turn(
+            message="The unit readiness date is 2026-06-18",
+            note="FM provides readiness date; bot should acknowledge and mention expected handover date is June 25",
+            user_role="FM_MANAGER",
+            expect_keywords=["2026-06-25", "handover", "june"],
+        ),
+        Turn(
+            message="",
+            note="FM clicks Approve Review — bot confirms with approval/FM-specific language",
+            action="approve_fm_review",
+            user_role="FM_MANAGER",
+            expect_keywords=["approved", "approval", "review", "submitted", "saved"],
+        ),
+    ],
+    tags=["fm-review", "lifecycle", "role-aware"],
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Scenario 35 — DD Engineer RDD Submit Report (RDD_REVIEW → REPORT_SUBMITTED)
+# ─────────────────────────────────────────────────────────────────────────────
+_S35 = Scenario(
+    id=35,
+    name="DD Engineer — Submit Handover Report (Phase 3a)",
+    goal=(
+        "DD Engineer sends messages with user_role=DD_ENGINEER. "
+        "Bot responds with RDD-specific language (handover meeting, contractual dates, guidelines). "
+        "Provide 4 dates + guidelines link. Submit report via action. "
+        "Verify rdd_status=REPORT_SUBMITTED in response state."
+    ),
+    turns=[
+        Turn(
+            message="I need to submit the handover meeting report",
+            note="DD Engineer opens session — bot must respond with RDD-specific language",
+            user_role="DD_ENGINEER",
+            expect_keywords=["handover", "report", "dates", "contractual", "meeting", "guidelines"],
+        ),
+        Turn(
+            message=(
+                "Guidelines link: https://cenomi.example.com/guidelines. "
+                "Actual handover date 2026-07-01, fit-out start 2026-07-05, "
+                "fit-out end 2026-08-01, trading date 2026-08-15"
+            ),
+            note="DD provides all required dates and guidelines — bot acknowledges and asks for confirmation",
+            user_role="DD_ENGINEER",
+            expect_keywords=["date", "handover", "trading", "submit", "confirm", "report"],
+        ),
+        Turn(
+            message="",
+            note=(
+                "DD clicks Submit Report action — in mock mode there is no sr_id so "
+                "the lifecycle assertion is soft only; validates bot responds to the action"
+            ),
+            action="submit_rdd_report",
+            user_role="DD_ENGINEER",
+            # expect_rdd_status omitted: requires a real sr_id from a prior CREATE+FM lifecycle.
+            # In mock/standalone mode the RDD submission node cannot run without an sr_id.
+            # This scenario validates RDD-specific bot language and action routing only.
+            expect_keywords=["report", "handover", "dates"],
+        ),
+    ],
+    tags=["rdd-review", "lifecycle", "role-aware"],
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Scenario 36 — DD Engineer Final Approve (RDD_REVIEW → SR_COMPLETED)
+# ─────────────────────────────────────────────────────────────────────────────
+# This scenario is designed to run in the SAME session as Scenario 35 after
+# the report has been submitted.  The eval runner should reuse the session_id
+# from Scenario 35 (by chaining).  When run standalone it requires a backend
+# session pre-seeded with rdd_status=REPORT_SUBMITTED.
+# ─────────────────────────────────────────────────────────────────────────────
+_S36 = Scenario(
+    id=36,
+    name="DD Engineer — Final Approve Handover (Phase 3b)",
+    goal=(
+        "After report submission, DD Engineer sends final approval action. "
+        "Expect workflow_stage=SR_COMPLETED and bot confirmation language. "
+        "NOTE: Requires a real platform API or a session pre-seeded with an SR "
+        "in RDD_REVIEW stage (rdd_status=REPORT_SUBMITTED). Disabled for mock eval."
+    ),
+    turns=[
+        Turn(
+            message="",
+            note="DD clicks Final Approve — requires pre-seeded RDD_REVIEW session",
+            action="approve_rdd_final",
+            user_role="DD_ENGINEER",
+            expect_workflow_stage="SR_COMPLETED",
+            expect_keywords=["approved", "complete", "handover", "finished", "successfully"],
+        ),
+    ],
+    tags=["rdd-review", "lifecycle", "role-aware", "final-approve"],
+    enabled=False,  # Requires a real platform API or pre-seeded session with sr_id in RDD_REVIEW
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Master list — all scenarios in order
 # ─────────────────────────────────────────────────────────────────────────────
 SCENARIOS: list[Scenario] = [
@@ -1458,4 +1593,6 @@ SCENARIOS: list[Scenario] = [
     _S10, _S11, _S12, _S13, _S14, _S15, _S16, _S17,
     _S18, _S19, _S20, _S21, _S22,
     _S23, _S24, _S25, _S26, _S27, _S28, _S29, _S30, _S31, _S32, _S33,
+    # RDD lifecycle scenarios (role-aware)
+    _S34, _S35, _S36,
 ]

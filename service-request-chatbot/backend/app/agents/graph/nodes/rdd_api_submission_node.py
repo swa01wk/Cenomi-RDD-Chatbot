@@ -137,13 +137,29 @@ async def rdd_api_submission_node(state: ServiceRequestState) -> dict[str, Any]:
             state=redact(payload),
         )
 
-    # ── 5. API call ────────────────────────────────────────────────────────────
+    # ── 5. API call (branch on rdd_action) ────────────────────────────────────
     svc = get_service_request_api_service()
-    result = await svc.submit_report(payload)
+
+    if rdd_action == "final_approve":
+        # Phase 3b: PATCH APPROVED — RDD final approval
+        if auth is not None:
+            try:
+                _permission_service.check("APPROVE_RDD_FINAL", auth)
+            except PermissionDeniedError as exc:
+                logger.warning("rdd_api_submission_node: final_approve permission denied — %s", exc)
+                return {
+                    "status": "FAILED",
+                    "response_message": f"Permission denied: {exc}",
+                }
+        result = await svc.patch_service_request(sr_id, payload)
+    else:
+        # Phase 3a: POST REPORT_SUBMITTED — submit the RDD report
+        result = await svc.submit_report(payload)
 
     logger.info(
-        "rdd_api_submission_node: sr_id=%s status_code=%s error=%s latency_ms=%s",
+        "rdd_api_submission_node: sr_id=%s action=%s status_code=%s error=%s latency_ms=%s",
         sr_id,
+        rdd_action,
         result.status_code,
         result.error,
         result.latency_ms,
@@ -180,23 +196,56 @@ async def rdd_api_submission_node(state: ServiceRequestState) -> dict[str, Any]:
     # ── 7. Failure path ────────────────────────────────────────────────────────
     if not api_success:
         error_detail = f" (Detail: {result.error})" if result.error else ""
+        action_label = "final approval" if rdd_action == "final_approve" else "report submission"
         return {
             "backend_refs": backend_refs,
             "status": "FAILED",
             "response_message": (
-                "I was unable to submit the RDD handover report due to an API error. "
+                f"I was unable to complete the RDD {action_label} due to an API error. "
                 f"Please try again later.{error_detail}"
             ),
         }
 
     # ── 8. Success ─────────────────────────────────────────────────────────────
     submitted_sr_id = result.sr_id or sr_id
-    backend_refs["rdd_submitted_sr_id"] = submitted_sr_id
-    backend_refs["rdd_status"] = "REPORT_SUBMITTED"
-
-    # Audit log
     session_id: UUID | None = _to_uuid(state.get("session_id"))
     user_id: UUID | None = _to_uuid(state.get("user_id"))
+
+    if rdd_action == "final_approve":
+        backend_refs["rdd_status"] = "APPROVED"
+
+        if trace_manager is not None and session_id is not None:
+            try:
+                repo = AuditLogRepository(trace_manager._session)
+                await repo.create(
+                    session_id=session_id,
+                    action="sr.rdd.final_approved",
+                    actor_user_id=user_id,
+                    after_state={
+                        "sr_id": submitted_sr_id,
+                        "status_code": result.status_code,
+                        "latency_ms": result.latency_ms,
+                    },
+                    metadata={"endpoint": result.endpoint, "workflow_stage": "RDD_REVIEW"},
+                )
+            except Exception:
+                logger.warning(
+                    "rdd_api_submission_node: audit log write failed (non-fatal)", exc_info=True
+                )
+
+        return {
+            "backend_refs": backend_refs,
+            "status": "SUBMITTED",
+            "workflow_stage": "SR_COMPLETED",
+            "response_message": (
+                f"The handover service request **{submitted_sr_id}** has been finally approved. "
+                "The service request is now complete."
+            ),
+        }
+
+    # Phase 3a success — report submitted; stay in RDD_REVIEW for final approval
+    backend_refs["rdd_submitted_sr_id"] = submitted_sr_id
+    backend_refs["rdd_status"] = "REPORT_SUBMITTED"
 
     if trace_manager is not None and session_id is not None:
         try:
@@ -220,10 +269,8 @@ async def rdd_api_submission_node(state: ServiceRequestState) -> dict[str, Any]:
     return {
         "backend_refs": backend_refs,
         "status": "SUBMITTED",
-        "workflow_stage": "SR_COMPLETED",
         "response_message": (
-            f"The RDD Handover Report has been successfully submitted. "
-            f"Your reference number is **{submitted_sr_id}**. "
-            "The service request is now complete."
+            f"The RDD Handover Report has been successfully submitted for SR **{submitted_sr_id}**. "
+            "When you're ready to complete the handover, click 'Final Approve'."
         ),
     }

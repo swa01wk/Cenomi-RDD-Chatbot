@@ -182,6 +182,13 @@ async def missing_field_node(state: ServiceRequestState) -> dict[str, Any]:
             "message": next_question,
         }
         updates["status"] = "WAITING_FOR_USER"
+
+        # Embed _last_asked_field in collected_data so merge_state_node can use
+        # it as a fallback hint on the next turn.  response_ui is not persisted
+        # between turns, but collected_data is, so this is the reliable channel.
+        current_collected: dict[str, Any] = dict(state.get("collected_data") or {})
+        current_collected["_last_asked_field"] = next_field or ""
+        updates["collected_data"] = current_collected
     else:
         # Nothing left to ask — signal readiness for the next pipeline step.
         updates["response_message"] = ""

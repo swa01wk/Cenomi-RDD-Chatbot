@@ -9,6 +9,11 @@ import { FieldCorrectionPanel } from "./FieldCorrectionPanel";
 import { LeaseSelectionCard } from "./LeaseSelectionCard";
 import { DocumentRequirementCard } from "./DocumentRequirementCard";
 import { SRPreviewCard } from "./SRPreviewCard";
+import { StageActions } from "./StageActions";
+import { DocumentUploadPanel } from "./DocumentUploadPanel";
+import { LifecycleStepper } from "./LifecycleStepper";
+import { StageContextPanel } from "./StageContextPanel";
+import { ROLES } from "./RoleSelector";
 import { postServiceRequestChat } from "@/lib/api/chat-client";
 import type {
   ChatMessage,
@@ -16,6 +21,7 @@ import type {
   ResponseUIConfirmationCard,
   ResponseUILeaseSelection,
   ResponseUISRPreviewCard,
+  UploadedDoc,
   WorkflowStep,
 } from "@/lib/types/chat";
 
@@ -46,19 +52,34 @@ function buildUserLabel(
   return text;
 }
 
+function getRoleLabel(roleId: string): string {
+  return ROLES.find((r) => r.id === roleId)?.label ?? roleId;
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface ServiceRequestChatProps {
+  userRole: string;
+  onClearRole: () => void;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function ServiceRequestChat() {
+export function ServiceRequestChat({ userRole, onClearRole }: ServiceRequestChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [isPending, setIsPending] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [latestUI, setLatestUI] = useState<ResponseUI | null>(null);
   const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>(DEFAULT_STEPS);
-  // Persists the most recent SR draft preview across all turns, regardless of
-  // what responseUI type the current turn returned.  Updated from draftPreview
-  // (authoritative backend snapshot) or from responseUI when it is sr_preview_card.
   const [latestSRPreview, setLatestSRPreview] = useState<ResponseUISRPreviewCard | null>(null);
+
+  // Stage-aware state
+  const [workflowStage, setWorkflowStage] = useState<string | null>(null);
+  const [rddStatus, setRddStatus] = useState<string | null>(null);
+  const [collectedData, setCollectedData] = useState<Record<string, string> | null>(null);
+  const [srId, setSrId] = useState<string | null>(null);
+  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDoc[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -77,11 +98,12 @@ export function ServiceRequestChat() {
         attachments?: File[];
         selectedLeaseId?: string;
         correctedFields?: Record<string, unknown>;
-        action?: "confirm" | "cancel";
+        action?: string;
         apiMessage?: string;
+        suppressUserBubble?: boolean;
       } = {},
     ) => {
-      if (userVisibleText) {
+      if (userVisibleText && !opts.suppressUserBubble) {
         const userMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: "user",
@@ -101,6 +123,7 @@ export function ServiceRequestChat() {
           selectedLeaseId: opts.selectedLeaseId,
           correctedFields: opts.correctedFields,
           action: opts.action,
+          userRole,
         });
 
         setSessionId(res.sessionId);
@@ -111,11 +134,19 @@ export function ServiceRequestChat() {
 
         setLatestUI(res.responseUI);
 
-        // Keep the SR preview in sync on every turn.
-        // draftPreview is an authoritative snapshot from the backend; fall back
-        // to responseUI itself when the turn directly returned a preview card.
+        // Update stage-aware state from API response
+        if (res.workflowStage !== undefined) setWorkflowStage(res.workflowStage);
+        if (res.rddStatus !== undefined) setRddStatus(res.rddStatus);
+        if (res.collectedData !== undefined) setCollectedData(res.collectedData);
+        if (res.srId !== undefined) setSrId(res.srId);
+
+        // Keep the SR preview in sync
         if (res.draftPreview) {
           setLatestSRPreview(res.draftPreview);
+          // Sync srId from draft preview as a fallback
+          if (res.draftPreview.srId && !srId) {
+            setSrId(res.draftPreview.srId);
+          }
         } else if (res.responseUI.type === "sr_preview_card") {
           setLatestSRPreview(res.responseUI as ResponseUISRPreviewCard);
         }
@@ -141,7 +172,8 @@ export function ServiceRequestChat() {
         setIsPending(false);
       }
     },
-    [sessionId],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessionId, userRole],
   );
 
   // ── Interaction handlers ───────────────────────────────────────────────────
@@ -182,6 +214,24 @@ export function ServiceRequestChat() {
     [sendTurn],
   );
 
+  // Stage action buttons (FM approve, RDD submit/final approve, etc.)
+  const handleStageAction = useCallback(
+    (action: string) => {
+      // Don't show a user chat bubble for pure button actions
+      sendTurn("", {
+        action,
+        apiMessage: "",
+        suppressUserBubble: true,
+      });
+    },
+    [sendTurn],
+  );
+
+  // Document upload complete callback
+  const handleUploadComplete = useCallback((doc: UploadedDoc) => {
+    setUploadedDocuments((prev) => [...prev, doc]);
+  }, []);
+
   // ── Sidebar card selection ─────────────────────────────────────────────────
 
   const sidebarUI = latestUI;
@@ -192,29 +242,58 @@ export function ServiceRequestChat() {
       <section className="flex min-h-[540px] flex-col rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:col-span-2">
         {/* Panel header */}
         <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
-          <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            Service Request Assistant
-          </span>
-          {/* Debug mode toggle */}
-          <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-zinc-400">
-            <span>Debug</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              Service Request Assistant
+            </span>
+            {/* Role badge */}
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              {getRoleLabel(userRole)}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Switch role button */}
             <button
               type="button"
-              role="switch"
-              aria-checked={debugMode}
-              onClick={() => setDebugMode((d) => !d)}
-              className={`relative h-4 w-7 rounded-full transition-colors ${
-                debugMode ? "bg-blue-600" : "bg-zinc-300 dark:bg-zinc-700"
-              }`}
+              onClick={onClearRole}
+              className="text-xs text-zinc-400 underline hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
             >
-              <span
-                className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all ${
-                  debugMode ? "left-3.5" : "left-0.5"
-                }`}
-              />
+              Switch role
             </button>
-          </label>
+
+            {/* Debug mode toggle */}
+            <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-zinc-400">
+              <span>Debug</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={debugMode}
+                onClick={() => setDebugMode((d) => !d)}
+                className={`relative h-4 w-7 rounded-full transition-colors ${
+                  debugMode ? "bg-blue-600" : "bg-zinc-300 dark:bg-zinc-700"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all ${
+                    debugMode ? "left-3.5" : "left-0.5"
+                  }`}
+                />
+              </button>
+            </label>
+          </div>
         </div>
+
+        {/* Stage context panel (FM/RDD reviewers see prior-stage data) */}
+        {(workflowStage === "FM_REVIEW" || workflowStage === "RDD_REVIEW") && srId && (
+          <div className="border-b border-zinc-100 px-4 py-2 dark:border-zinc-800">
+            <StageContextPanel
+              workflowStage={workflowStage}
+              collectedData={collectedData}
+              srId={srId}
+            />
+          </div>
+        )}
 
         {/* Messages area */}
         <div
@@ -254,9 +333,6 @@ export function ServiceRequestChat() {
                     )}
                     {isPreviewCard && (
                       <div className="mt-2">
-                        {/* Use latestSRPreview so the card reflects field updates
-                            made in subsequent turns; only the last card is editable
-                            and only when the SR has not yet been submitted. */}
                         <SRPreviewCard
                           data={latestSRPreview ?? (m.responseUI as ResponseUISRPreviewCard)}
                           onSave={
@@ -275,13 +351,37 @@ export function ServiceRequestChat() {
           )}
         </div>
 
+        {/* Stage action buttons (FM approve / RDD submit / final approve) */}
+        <StageActions
+          workflowStage={workflowStage}
+          userRole={userRole}
+          rddStatus={rddStatus}
+          onAction={handleStageAction}
+          disabled={isPending}
+        />
+
         {/* Input */}
         <ChatInput onSend={handleSend} disabled={isPending} />
       </section>
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <aside className="space-y-3">
+        {/* Lifecycle stepper — shown once SR is created */}
+        <LifecycleStepper currentStage={workflowStage} srId={srId} />
+
         <WorkflowProgressCard steps={workflowSteps} />
+
+        {/* Document upload panel for FM / RDD stages */}
+        {sessionId && (
+          <DocumentUploadPanel
+            sessionId={sessionId}
+            srId={srId}
+            workflowStage={workflowStage}
+            userRole={userRole}
+            uploadedDocuments={uploadedDocuments}
+            onUploadComplete={handleUploadComplete}
+          />
+        )}
 
         {sidebarUI?.type === "lease_selection" && (
           <LeaseSelectionCard data={sidebarUI} onSelect={handleLeaseSelect} />
@@ -303,10 +403,7 @@ export function ServiceRequestChat() {
           <DocumentRequirementCard data={sidebarUI} />
         )}
 
-        {/* Always render the latest SR draft/submitted preview when available.
-            latestSRPreview persists across turns so the card stays visible
-            even when the current responseUI is a plain message type.
-            onSave is only wired for drafts; submitted SRs are read-only. */}
+        {/* Always render the latest SR draft/submitted preview when available */}
         {latestSRPreview && (
           <SRPreviewCard
             data={latestSRPreview}

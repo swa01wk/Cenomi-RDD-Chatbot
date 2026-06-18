@@ -109,6 +109,20 @@ export type ResponseUI =
   | ResponseUIDocumentRequirement
   | ResponseUISRPreviewCard;
 
+// ─── User roles ───────────────────────────────────────────────────────────────
+
+export type UserRole = "MALL_MANAGER" | "FM_MANAGER" | "OPERATIONS" | "DD_ENGINEER";
+
+// ─── Uploaded document tracking ───────────────────────────────────────────────
+
+export type UploadedDoc = {
+  documentId: string | null;
+  documentType: string;
+  documentTypeLabel: string;
+  filename: string;
+  signedUrl?: string | null;
+};
+
 // ─── API contract ─────────────────────────────────────────────────────────────
 
 export type ChatServiceRequest = {
@@ -117,7 +131,8 @@ export type ChatServiceRequest = {
   attachmentIds?: string[];
   selectedLeaseId?: string;
   correctedFields?: Record<string, unknown>;
-  action?: "confirm" | "cancel";
+  action?: string;
+  userRole?: string;
 };
 
 export type ChatServiceResponse = {
@@ -131,6 +146,14 @@ export type ChatServiceResponse = {
    * plain message or confirmation type.
    */
   draftPreview?: ResponseUISRPreviewCard;
+  /** Workflow stage returned in the state payload. */
+  workflowStage?: string | null;
+  /** RDD status: REPORT_SUBMITTED | APPROVED | null */
+  rddStatus?: string | null;
+  /** Collected data snapshot for stage context panel. */
+  collectedData?: Record<string, string> | null;
+  /** SR ID from backend_refs — present after SR is created. */
+  srId?: string | null;
 };
 
 // ─── Local UI message ─────────────────────────────────────────────────────────

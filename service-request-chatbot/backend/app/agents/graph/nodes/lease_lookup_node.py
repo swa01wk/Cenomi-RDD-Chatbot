@@ -165,10 +165,21 @@ async def lease_lookup_node(
     # ── Path B: no lease yet selected — run lookup ────────────────────────────
     # Normalise lease_code: strip whitespace and lowercase so that inputs like
     # "T0105712" or "t0 105712" match the canonical lowercase codes in the DB.
+    #
+    # Additionally, when the LLM extracts a lease code from a complex multi-field
+    # message (e.g. "t0105712 – description: Pre-opening check"), the extracted
+    # value may include trailing punctuation or extra words after the actual code.
+    # We take only the first contiguous alphanumeric sequence so that
+    # "t0105712 – description" normalises to "t0105712" rather than failing lookup.
+    import re as _re
     raw_lease_code: str | None = collected.get("lease_code")
-    normalised_lease_code: str | None = (
-        raw_lease_code.strip().lower().replace(" ", "") if raw_lease_code else None
-    )
+    normalised_lease_code: str | None = None
+    if raw_lease_code:
+        _cleaned = raw_lease_code.strip().lower()
+        # Take the first unbroken alphanumeric run (no spaces or punctuation).
+        _tokens = _re.split(r"[^a-z0-9]", _cleaned)
+        _first_token = next((t for t in _tokens if t), None)
+        normalised_lease_code = _first_token if _first_token else _cleaned.replace(" ", "")
     query = LeaseLookupQuery(
         lease_code=normalised_lease_code,
         brand=collected.get("brand"),

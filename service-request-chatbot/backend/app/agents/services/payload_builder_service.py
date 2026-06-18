@@ -384,6 +384,42 @@ def build_rdd_report_payload(
     return payload
 
 
+def build_rdd_approve_payload(
+    backend_refs: dict[str, Any],
+    comment: str = "",
+) -> dict[str, Any]:
+    """Build the PATCH payload for RDD final approval (status=APPROVED).
+
+    Mirrors the fm_approve shape — minimal body, no lease_code/lease_id at top level.
+    """
+    sr_id: str = backend_refs.get("sr_id", "")
+    tenant_profile_id = backend_refs.get("tenant_profile_id")
+    property_id = backend_refs.get("property_id")
+
+    # Fall back to create_payload for tenant/property IDs if not directly on backend_refs
+    create_payload: dict[str, Any] = backend_refs.get("create_payload") or {}
+    inner: dict[str, Any] = create_payload.get("payload") or {}
+    if not tenant_profile_id:
+        tenant_profile_id = inner.get("tenant_profile_id")
+    if not property_id:
+        property_id = inner.get("property_id")
+
+    return {
+        "payload": {
+            "comment": comment,
+            "user_action": None,
+            "current_sr_status": "APPROVED",
+            "sr_id": sr_id,
+        },
+        "status": "APPROVED",
+        "service_request_id": sr_id,
+        "service_category": "FIT_OUT_AND_HANDOVER",
+        "sub_category": "HANDOVER",
+        "tenant_profile_id": tenant_profile_id,
+        "property_id": property_id,
+    }
+
+
 # ── PayloadBuilderService class (DI / backward-compatible wrapper) ────────────
 
 
@@ -419,3 +455,10 @@ class PayloadBuilderService:
         self, data: dict[str, Any], backend_refs: dict[str, Any]
     ) -> dict[str, Any]:
         return build_rdd_report_payload(data, backend_refs)
+
+    def build_rdd_approve_payload(
+        self,
+        backend_refs: dict[str, Any],
+        comment: str = "",
+    ) -> dict[str, Any]:
+        return build_rdd_approve_payload(backend_refs, comment)

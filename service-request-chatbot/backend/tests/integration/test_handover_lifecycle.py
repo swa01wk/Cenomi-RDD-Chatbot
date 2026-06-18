@@ -349,7 +349,7 @@ class TestRDDReviewLifecycle:
         state["backend_refs"] = pb_result["backend_refs"]
         assert state["backend_refs"]["rdd_payload"]["status"] == "REPORT_SUBMITTED"
 
-        # Submit
+        # Submit (Phase 3a)
         mock_result = _mock_submit_result()
         with patch(
             "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service"
@@ -359,8 +359,10 @@ class TestRDDReviewLifecycle:
             mock_factory.return_value = mock_svc
             result = await rdd_api_submission_node(state)
 
+        # Phase 3a: report submitted; SR stays in RDD_REVIEW until final_approve
         assert result["status"] == "SUBMITTED"
-        assert result["workflow_stage"] == "SR_COMPLETED"
+        assert result["backend_refs"]["rdd_status"] == "REPORT_SUBMITTED"
+        assert result.get("workflow_stage") != "SR_COMPLETED"
 
     @pytest.mark.asyncio
     async def test_unauthorized_role_blocked(self) -> None:

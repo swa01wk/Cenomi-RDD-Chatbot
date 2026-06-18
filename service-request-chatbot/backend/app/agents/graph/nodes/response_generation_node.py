@@ -62,6 +62,7 @@ async def response_generation_node(state: ServiceRequestState) -> dict[str, Any]
     validation_errors: list[dict] = state.get("validation_errors") or []
     conversation_history: list[dict] = state.get("conversation_history") or []  # type: ignore[typeddict-item]
     user_message: str = state.get("user_message") or ""
+    user_role: str | None = state.get("user_role") or (state.get("backend_refs") or {}).get("user_role")
 
     response_intent = current_message or _FALLBACK_RESPONSE
 
@@ -76,6 +77,7 @@ async def response_generation_node(state: ServiceRequestState) -> dict[str, Any]
         confirmation_status=state.get("confirmation_status"),
         response_ui_type=current_ui.get("type") if current_ui else None,
         conversation_history=conversation_history,
+        user_role=user_role,
     )
 
     # ── Call the LLM ────────────────────────────────────────────────────────

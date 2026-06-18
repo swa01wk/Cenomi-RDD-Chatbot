@@ -128,6 +128,26 @@ IMPORTANT — context-aware scoring:
     PREVIEW_SERVICE_REQUEST — do NOT keep the prior intent.
 
 ════════════════════════════════════════════════════════════
+CALLER ROLE GUIDANCE
+════════════════════════════════════════════════════════════
+
+When "Current user role" is provided, use it to sharpen classification:
+
+  MALL_MANAGER
+    Primary intent: CREATE_HANDOVER_SERVICE_REQUEST
+    They raise new SRs when a lease is activated.
+
+  FM_MANAGER | OPERATIONS
+    Primary intent: APPROVE_HANDOVER_SERVICE_REQUEST (FM stage)
+    "approve", "save progress", "inspection done", "submit documents"
+    → APPROVE_HANDOVER_SERVICE_REQUEST
+
+  DD_ENGINEER
+    Primary intent: APPROVE_HANDOVER_SERVICE_REQUEST (RDD stage)
+    "submit report", "final approve", "handover meeting done"
+    → APPROVE_HANDOVER_SERVICE_REQUEST
+
+════════════════════════════════════════════════════════════
 SESSION CONTINUITY HINTS
 ════════════════════════════════════════════════════════════
 

@@ -67,6 +67,11 @@ async def rdd_review_entry_node(state: ServiceRequestState) -> dict[str, Any]:
         backend_refs["rdd_action"] = "submit"
         return {"backend_refs": backend_refs}
 
+    if action_override == "approve_rdd_final":
+        log.info("rdd_review_entry.action_final_approve")
+        backend_refs["rdd_action"] = "final_approve"
+        return {"backend_refs": backend_refs}
+
     if action_override == "cancel_update":
         log.info("rdd_review_entry.action_cancel")
         return {

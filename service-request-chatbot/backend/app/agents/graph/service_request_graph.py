@@ -44,6 +44,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agents.graph.nodes.api_submission_node import api_submission_node
 from app.agents.graph.nodes.confirmation_node import confirmation_node
+from app.agents.graph.nodes.document_upload_node import document_upload_node
 from app.agents.graph.nodes.field_extraction_node import field_extraction_node
 from app.agents.graph.nodes.fm_api_submission_node import fm_api_submission_node
 from app.agents.graph.nodes.fm_payload_builder_node import fm_payload_builder_node
@@ -111,9 +112,19 @@ def _route_after_sync(state: dict[str, Any]) -> str:
     collection stages.  Route them back through the supervisor so the user can
     start a new request or trigger other intents (preview, check status, etc.)
     rather than re-entering the handover collection pipeline with an unknown stage.
+
+    Proactive routing: when the role matches the current stage, skip the supervisor
+    entirely and route directly to the stage entry node.
     """
     workflow_stage: str = state.get("workflow_stage") or "CREATE_SR"
+    user_role = state.get("user_role") or (state.get("backend_refs") or {}).get("user_role")
     agent = state.get("active_agent")
+
+    # Proactive routing — skip supervisor when role matches stage
+    if workflow_stage == "FM_REVIEW" and user_role in ("FM_MANAGER", "OPERATIONS"):
+        return "fm_review_entry"
+    if workflow_stage == "RDD_REVIEW" and user_role == "DD_ENGINEER":
+        return "rdd_review_entry"
 
     if workflow_stage == "FM_REVIEW":
         return "fm_review_entry"
@@ -261,17 +272,25 @@ def _route_after_confirmation(state: dict[str, Any]) -> str:
 
 
 def _route_after_fm_confirmation(state: dict[str, Any]) -> str:
-    """Proceed to FM payload builder after FM confirmation."""
+    """Proceed to document_upload (then FM payload builder) after FM confirmation."""
     if state.get("confirmation_status") == "CONFIRMED":
-        return "fm_payload_builder"
+        return "document_upload"
     return "response_generation"
 
 
 def _route_after_rdd_confirmation(state: dict[str, Any]) -> str:
-    """Proceed to RDD payload builder after RDD confirmation."""
+    """Proceed to document_upload (then RDD payload builder) after RDD confirmation."""
     if state.get("confirmation_status") == "CONFIRMED":
-        return "rdd_payload_builder"
+        return "document_upload"
     return "response_generation"
+
+
+def _route_after_doc_upload(state: dict[str, Any]) -> str:
+    """Route to the correct payload builder based on current workflow stage."""
+    stage = state.get("workflow_stage") or ""
+    if stage == "RDD_REVIEW":
+        return "rdd_payload_builder"
+    return "fm_payload_builder"
 
 
 # ---------------------------------------------------------------------------
@@ -304,6 +323,7 @@ def build_service_request_graph():
     graph.add_node("fm_confirmation", confirmation_node)
     graph.add_node("rdd_confirmation", confirmation_node)
     graph.add_node("payload_builder", payload_builder_node)
+    graph.add_node("document_upload", document_upload_node)
     graph.add_node("fm_payload_builder", fm_payload_builder_node)
     graph.add_node("rdd_payload_builder", rdd_payload_builder_node)
     graph.add_node("api_submission", api_submission_node)
@@ -420,20 +440,22 @@ def build_service_request_graph():
     graph.add_conditional_edges(
         "fm_confirmation",
         _route_after_fm_confirmation,
-        {"fm_payload_builder": "fm_payload_builder", "response_generation": "response_generation"},
+        {"document_upload": "document_upload", "response_generation": "response_generation"},
     )
     graph.add_conditional_edges(
         "rdd_confirmation",
         _route_after_rdd_confirmation,
-        {
-            "rdd_payload_builder": "rdd_payload_builder",
-            "response_generation": "response_generation",
-        },
+        {"document_upload": "document_upload", "response_generation": "response_generation"},
     )
 
     # ── Submission pipelines ─────────────────────────────────────────────────
     graph.add_edge("payload_builder", "api_submission")
     graph.add_edge("api_submission", "response_generation")
+    graph.add_conditional_edges(
+        "document_upload",
+        _route_after_doc_upload,
+        {"fm_payload_builder": "fm_payload_builder", "rdd_payload_builder": "rdd_payload_builder"},
+    )
     graph.add_edge("fm_payload_builder", "fm_api_submission")
     graph.add_edge("fm_api_submission", "response_generation")
     graph.add_edge("rdd_payload_builder", "rdd_api_submission")

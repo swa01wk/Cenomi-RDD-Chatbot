@@ -141,7 +141,42 @@ async def handover_entry_node(state: ServiceRequestState) -> dict[str, Any]:
     confirmation_status: str | None = state.get("confirmation_status")
     action_override: str | None = state.get("action_override")  # type: ignore[assignment]
 
-    # ── 0. Explicit UI action — takes priority over text parsing ───────────
+    # ── 0a. New SR requested while a prior SR is in a terminal stage ──────
+    # When the supervisor has classified a fresh CREATE intent but the session
+    # is still at SR_CREATED or SR_COMPLETED (submitted), reset ALL draft state
+    # so the new request starts with a completely clean slate.  Preserve only
+    # the user_role so the role-based UI keeps working.
+    workflow_stage: str | None = state.get("workflow_stage")
+    intent: str | None = state.get("intent")
+
+    if (
+        workflow_stage in ("SR_CREATED", "SR_COMPLETED")
+        and intent == "CREATE_HANDOVER_SERVICE_REQUEST"
+    ):
+        old_refs: dict = state.get("backend_refs") or {}
+        preserved_refs: dict = {}
+        if old_refs.get("user_role"):
+            preserved_refs["user_role"] = old_refs["user_role"]
+        log.info(
+            "handover_entry.new_sr_after_terminal_stage",
+            prior_stage=workflow_stage,
+        )
+        return {
+            "workflow_stage": "CREATE_SR",
+            "collected_data": {},
+            "extracted_fields": {},
+            "missing_fields": [],
+            "validation_errors": [],
+            "selected_lease": None,
+            "lease_matches": [],
+            "confirmation_status": None,
+            "confirmation_required": False,
+            "backend_refs": preserved_refs,
+            "response_ui": {},
+            "status": "IN_PROGRESS",
+        }
+
+    # ── 0b. Explicit UI action — takes priority over text parsing ──────────
     if action_override in ("confirm", "confirm_create_sr"):
         log.info("handover_entry.action_override_confirm")
         return {"confirmation_status": "CONFIRMED"}

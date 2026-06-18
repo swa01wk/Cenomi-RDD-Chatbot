@@ -206,11 +206,11 @@ def _extract_uuid(state: dict[str, Any] | None, key: str) -> UUID | None:
 
 
 # Keys injected at runtime that contain non-serialisable objects (DB sessions,
-# service instances) or internal decorator bookkeeping.  These are excluded from
-# every state snapshot / diff so that JSON serialisation never fails when the
-# trace layer persists state.
+# service instances, auth context) or internal decorator bookkeeping.  These
+# are excluded from every state snapshot / diff so that JSON serialisation
+# never fails when the trace layer persists state.
 _RUNTIME_KEYS: frozenset[str] = frozenset(
-    {"conversation_state_service", "trace_manager", "_trace_node_run_id"}
+    {"conversation_state_service", "trace_manager", "_trace_node_run_id", "auth"}
 )
 
 

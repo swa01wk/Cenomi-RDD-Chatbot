@@ -76,6 +76,10 @@ class ServiceRequestGraphState(TypedDict, total=False):
     action_override: Optional[str]           # "confirm" | "cancel" | None
     corrected_fields: Optional[dict]         # inline edits from confirmation card
 
+    # ── Role / auth context ────────────────────────────────────────────────────
+    user_role: Optional[str]   # MALL_MANAGER | FM_MANAGER | OPERATIONS | DD_ENGINEER
+    auth: Any                  # AuthContext instance — injected by orchestration layer
+
     # ── Runtime-injected services (not serialisable; never checkpointed) ──────
     # LangGraph v0.2 only propagates keys that are declared as TypedDict fields.
     # These objects are injected by ChatOrchestrationService via initial_state

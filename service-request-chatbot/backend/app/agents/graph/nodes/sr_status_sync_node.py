@@ -145,6 +145,13 @@ async def sr_status_sync_node(state: ServiceRequestState) -> dict[str, Any]:
     backend_refs["platform_sr_status"] = platform_status
     backend_refs["sr_operations"] = operations
 
+    # Persist rdd_status so the frontend can distinguish REPORT_SUBMITTED
+    # from not-yet-submitted, and show the correct action button (Submit vs Final Approve).
+    if platform_status == "REPORT_SUBMITTED":
+        backend_refs["rdd_status"] = "REPORT_SUBMITTED"
+    elif platform_status == "APPROVED":
+        backend_refs["rdd_status"] = "APPROVED"
+
     log.info(
         "sr_status_sync_node.done",
         sr_id=sr_id,

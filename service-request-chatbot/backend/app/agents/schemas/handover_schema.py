@@ -87,7 +87,7 @@ FM_REVIEW_STAGE = StageDefinition(
     role="FM_MANAGER",
     required_fields=(
         "unit_readiness_date",
-        "expected_handover_date",
+        # expected_handover_date is auto-computed (readiness + 7 days) — never asked from user
     ),
     required_documents=(
         "SR_HANDOVER_CHECKLIST",
@@ -127,6 +127,10 @@ ALLOWED_EXTRACTED_FIELDS: frozenset[str] = frozenset(
     + FM_REVIEW_STAGE.required_fields
     + RDD_REVIEW_STAGE.required_fields
 )
+
+# Fields computed by backend logic (not user-supplied, not backend-API-derived).
+# The graph must never ask the user for these and the LLM must not extract them.
+BACKEND_COMPUTED_FIELDS: frozenset[str] = frozenset({"expected_handover_date"})
 
 # Fields populated from backend APIs (lease lookup, tenant profile, etc.).
 # The graph must not ask the user for these; they are resolved programmatically.
@@ -271,7 +275,7 @@ EXTRACTABLE_FIELDS: frozenset[str] = frozenset(
         "comments",
         "notes",
         "unit_readiness_date",
-        "expected_handover_date",
+        # expected_handover_date is backend-computed (readiness + 7 days) — never extracted
         "guideLineLink",
         "actual_handover_date",
         "fitout_start_date",

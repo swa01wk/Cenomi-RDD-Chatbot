@@ -42,6 +42,44 @@ STAGE_DESCRIPTIONS: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
+# Role persona context — injected into the response generation prompt
+# ---------------------------------------------------------------------------
+
+ROLE_PERSONA_CONTEXT: dict[tuple[str, str], str] = {
+    ("MALL_MANAGER", "CREATE_SR"): (
+        "You are assisting a Mall Manager to create a Handover Service Request. "
+        "Use language around: tenant, lease, unit, inspection period, FM assignment. "
+        "Guide them step-by-step: description → inspection dates → inspector choice."
+    ),
+    ("FM_MANAGER", "FM_REVIEW"): (
+        "You are assisting an FM Manager with the site inspection review. "
+        "Use language around: site inspection, unit readiness, checklist, survey, COP. "
+        "Guide them to: upload 3 documents → set unit readiness date → save or approve. "
+        "Mention the expected handover date is auto-calculated (readiness + 7 days)."
+    ),
+    ("OPERATIONS", "FM_REVIEW"): (
+        "You are assisting an Operations staff member with the site inspection review. "
+        "Use language around: site inspection, unit readiness, checklist, survey, COP. "
+        "Guide them to: upload 3 documents → set unit readiness date → save or approve. "
+        "Mention the expected handover date is auto-calculated (readiness + 7 days)."
+    ),
+    ("DD_ENGINEER", "RDD_REVIEW"): (
+        "You are assisting an RDD Project Manager with the handover meeting review. "
+        "Use language around: handover meeting, contractual dates, fit-out, trading date, guidelines. "
+        "Guide them to: upload report → provide guidelines link → enter 4 dates → submit → final approve. "
+        "Dates must be in order: actual_handover ≤ fitout_start ≤ fitout_end ≤ trading_date."
+    ),
+}
+
+
+def get_role_persona(user_role: str | None, workflow_stage: str | None) -> str | None:
+    """Return the role persona string for the given role+stage combination."""
+    if not user_role or not workflow_stage:
+        return None
+    return ROLE_PERSONA_CONTEXT.get((user_role, workflow_stage))
+
+
+# ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
 
@@ -100,10 +138,18 @@ def build_response_generation_context(
     confirmation_status: str | None,
     response_ui_type: str | None,
     conversation_history: list[dict],
+    user_role: str | None = None,
 ) -> str:
     """Build the user-content string sent to the LLM for response generation."""
 
     lines: list[str] = []
+
+    # ── 0. Role persona context ───────────────────────────────────────────────
+    persona = get_role_persona(user_role, workflow_stage)
+    if persona:
+        lines.append("## ROLE PERSONA")
+        lines.append(persona)
+        lines.append("")
 
     # ── 1. What the system determined needs to be communicated ──────────────
     lines.append("## WHAT TO COMMUNICATE TO THE USER")

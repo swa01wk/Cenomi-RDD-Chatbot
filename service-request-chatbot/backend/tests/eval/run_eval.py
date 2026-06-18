@@ -73,6 +73,7 @@ class TurnResult:
     response_message: str = ""
     ui_type: str = ""
     workflow_stage: str = ""
+    rdd_status: str = ""
     sr_reference: str = ""
     latency_ms: int = 0
     http_error: Optional[str] = None
@@ -130,6 +131,8 @@ async def _post_turn(
         payload["corrected_fields"] = spec.corrected_fields
     if spec.selected_lease_id:
         payload["selected_lease_id"] = spec.selected_lease_id
+    if spec.user_role:
+        payload["user_role"] = spec.user_role
 
     t0 = time.monotonic()
     resp = await client.post(
@@ -200,6 +203,15 @@ def _assert_turn(
         if ready:
             failures.append("ready_to_submit: expected False but got True")
 
+    # ── Hard: rdd_status ─────────────────────────────────────────────────────
+    if spec.expect_rdd_status is not None:
+        actual_rdd_status: str = state.get("rdd_status") or ""
+        if actual_rdd_status != spec.expect_rdd_status:
+            failures.append(
+                f"rdd_status: expected '{spec.expect_rdd_status}', "
+                f"got '{actual_rdd_status or '(empty)'}'"
+            )
+
     # ── Soft: keyword check ───────────────────────────────────────────────────
     if spec.expect_keywords:
         msg_lower = msg.lower()
@@ -215,6 +227,17 @@ def _assert_turn(
         if active_agent:
             warnings.append(
                 f"active_agent: expected null/empty after reset, got '{active_agent}'"
+            )
+
+    # ── Soft: sr_id present ───────────────────────────────────────────────────
+    if spec.expect_sr_id_present:
+        draft = body.get("draft_preview") or {}
+        sr_id_from_draft = draft.get("srId")
+        sr_id_from_state = state.get("sr_id")
+        if not sr_id_from_draft and not sr_id_from_state:
+            warnings.append(
+                "sr_id not present in response "
+                "(checked draft_preview.srId and state.sr_id)"
             )
 
     # ── Soft: ui.fields value check (confirmation_card) ──────────────────────
@@ -283,6 +306,7 @@ async def run_scenario(
 
             ui_type: str = (body.get("ui") or {}).get("type", "") or ""
             stage: str = (body.get("state") or {}).get("workflow_stage", "") or ""
+            rdd_status_val: str = (body.get("state") or {}).get("rdd_status", "") or ""
             msg: str = body.get("message", "") or ""
 
             tr = TurnResult(
@@ -295,6 +319,7 @@ async def run_scenario(
                 response_message=msg,
                 ui_type=ui_type,
                 workflow_stage=stage,
+                rdd_status=rdd_status_val,
                 sr_reference=sr_ref,
                 latency_ms=latency_ms,
             )
@@ -340,6 +365,8 @@ def _print_turn_verbose(tr: TurnResult, spec: Turn) -> None:
             extras.append(f"ui={tr.ui_type!r}")
         if tr.workflow_stage:
             extras.append(f"stage={tr.workflow_stage!r}")
+        if tr.rdd_status:
+            extras.append(f"rdd_status={tr.rdd_status!r}")
         extra_str = "  " + dim("  ".join(extras)) if extras else ""
         print(f"          {dim('→')} {dim(snippet)}{extra_str}")
 
@@ -367,7 +394,7 @@ _HDR = "═" * _W
 
 def _print_report(results: list[ScenarioResult], elapsed: float) -> None:
     print(f"\n{bold(_HDR)}")
-    print(bold("  CHATBOT EVALUATION REPORT — Handover Service Request"))
+    print(bold("  CHATBOT EVALUATION REPORT — Handover Service Request + RDD Lifecycle"))
     print(f"{bold(_HDR)}\n")
 
     for res in results:
@@ -384,6 +411,8 @@ def _print_report(results: list[ScenarioResult], elapsed: float) -> None:
                 extras.append(f"ui={tr.ui_type}")
             if tr.workflow_stage:
                 extras.append(f"stage={tr.workflow_stage}")
+            if tr.rdd_status:
+                extras.append(f"rdd={tr.rdd_status}")
             if tr.sr_reference:
                 extras.append(f"ref={tr.sr_reference}")
             extra_str = f"  {dim('(' + '  '.join(extras) + ')')}" if extras else ""

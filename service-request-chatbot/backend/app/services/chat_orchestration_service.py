@@ -33,12 +33,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.graph.service_request_graph import get_compiled_graph
 from app.agents.services.conversation_state_service import ConversationStateService
+from app.agents.services.permission_service import ROLE_PERMISSION_MAP
 from app.core.injection_guard import scan_message
 from app.db.models import ChatSession
 from app.db.repositories.audit_log_repo import AuditLogRepository
 from app.db.repositories.chat_message_repo import ChatMessageRepository
 from app.db.repositories.chat_session_repo import ChatSessionRepository
 from app.observability.trace_manager import TraceManager
+from app.types.chat import AuthContext
 
 log = structlog.get_logger(__name__)
 
@@ -54,6 +56,8 @@ class ChatTurnState:
     workflow_stage: str | None
     missing_fields: list[str]
     ready_to_submit: bool
+    rdd_status: str | None = None
+    collected_data: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +101,7 @@ class ChatOrchestrationService:
         action: str | None = None,
         selected_lease_id: str | None = None,
         corrected_fields: dict[str, Any] | None = None,
+        user_role: str | None = None,
     ) -> ChatTurnResult:
         """Execute one complete chat turn and return structured result."""
 
@@ -207,6 +212,8 @@ class ChatOrchestrationService:
         )
 
         # 5. Build initial graph state -----------------------------------------
+        auth_ctx = _build_auth_context(user_role)
+
         initial_state: dict[str, Any] = {
             "session_id": str(session_uuid),
             "user_id": str(user_id),
@@ -221,6 +228,9 @@ class ChatOrchestrationService:
             "active_agent": chat_session.active_agent,
             "intent": chat_session.intent,
             "workflow_stage": chat_session.workflow_stage,
+            # Role + auth context
+            "user_role": user_role,
+            "auth": auth_ctx,
         }
 
         # Inject UI-layer overrides so graph nodes can act on explicit button
@@ -231,6 +241,11 @@ class ChatOrchestrationService:
             initial_state["corrected_fields"] = corrected_fields
         if selected_lease_id:
             initial_state["selected_lease"] = {"id": selected_lease_id}
+        # Write user_role into backend_refs so stage entry nodes can read it.
+        # They already look up backend_refs["user_role"] — this ensures it is
+        # available even on the very first turn (before load_session populates backend_refs).
+        if user_role:
+            initial_state.setdefault("backend_refs", {})["user_role"] = user_role
 
         # 6. Invoke graph -------------------------------------------------------
         result_state: dict[str, Any]
@@ -323,6 +338,8 @@ class ChatOrchestrationService:
         # 12. Build and return result ------------------------------------------
         missing_fields: list[str] = result_state.get("missing_fields") or []
         ready_to_submit = graph_status in ("READY_TO_SUBMIT", "SUBMITTED")
+        rdd_status: str | None = (result_state.get("backend_refs") or {}).get("rdd_status")
+        collected_result: dict[str, Any] | None = result_state.get("collected_data") or None
 
         # Build a preview snapshot from collected_data on every turn.
         # Sent alongside every response so the frontend keeps its SR preview card
@@ -353,6 +370,8 @@ class ChatOrchestrationService:
                 workflow_stage=result_state.get("workflow_stage"),
                 missing_fields=missing_fields,
                 ready_to_submit=ready_to_submit,
+                rdd_status=rdd_status,
+                collected_data=collected_result,
             ),
             trace_id=trace_id,
             draft_preview=draft_preview,
@@ -458,3 +477,9 @@ def parse_session_id(session_id: str | None) -> UUID | None:
     except ValueError:
         log.warning("chat.invalid_session_id_ignored", raw=session_id)
         return None
+
+
+def _build_auth_context(user_role: str | None) -> AuthContext:
+    """Derive an AuthContext from a role string using ROLE_PERMISSION_MAP."""
+    roles = ROLE_PERMISSION_MAP.get(user_role or "", frozenset())
+    return AuthContext(subject_id="chat_user", tenant_id=None, roles=roles)

@@ -59,8 +59,9 @@ class TestMissingFieldNodeBasic:
         state = _state(workflow_stage="FM_REVIEW", collected_data={})
         result = await missing_field_node(state)
         missing = set(result["missing_fields"])
+        # expected_handover_date is now backend-computed (not required from user)
         assert "unit_readiness_date" in missing
-        assert "expected_handover_date" in missing
+        assert "expected_handover_date" not in missing
 
     @pytest.mark.asyncio
     async def test_status_is_waiting_when_question_asked(self) -> None:
@@ -113,17 +114,21 @@ class TestOneQuestionAtATime:
 
     @pytest.mark.asyncio
     async def test_after_first_field_answered_next_is_asked(self) -> None:
-        """Providing one field should shift the question to the next missing one."""
-        state1 = _state(workflow_stage="FM_REVIEW", collected_data={})
+        """Providing one RDD field should shift the question to the next missing one.
+
+        Uses RDD_REVIEW (5 required fields) because FM_REVIEW now has only 1
+        required field (unit_readiness_date); after answering it there are none left.
+        """
+        state1 = _state(workflow_stage="RDD_REVIEW", collected_data={})
         result1 = await missing_field_node(state1)
         first_field = result1["response_ui"]["field"]
 
         # Simulate user answering the first question
         collected = {first_field: "2025-06-01"}
-        state2 = _state(workflow_stage="FM_REVIEW", collected_data=collected)
+        state2 = _state(workflow_stage="RDD_REVIEW", collected_data=collected)
         result2 = await missing_field_node(state2)
 
-        # There should still be a question (for the second missing field)
+        # There should still be a question (for the next missing field)
         assert result2["status"] == "WAITING_FOR_USER"
         second_field = result2["response_ui"]["field"]
         assert second_field != first_field

@@ -111,7 +111,10 @@ class TestCreateSRStage:
 
 
 class TestFMReviewStage:
-    _EXPECTED_FIELDS = ("unit_readiness_date", "expected_handover_date")
+    # expected_handover_date removed from required_fields — it is now
+    # auto-computed by merge_state_node (readiness + 7 days) and lives in
+    # BACKEND_COMPUTED_FIELDS.  The user is never asked for it.
+    _EXPECTED_FIELDS = ("unit_readiness_date",)
     _EXPECTED_DOCS = (
         "SR_HANDOVER_CHECKLIST",
         "SR_HANDOVER_SITE_SURVEY",
@@ -272,9 +275,11 @@ class TestHelperUtilities:
         assert set(missing) == set(FM_REVIEW_STAGE.required_fields)
 
     def test_get_missing_fields_partial(self) -> None:
+        # expected_handover_date is now backend-computed (not in required_fields),
+        # so when unit_readiness_date is set, there are no missing fields.
         collected = {"unit_readiness_date": "2025-01-01"}
         missing = get_missing_fields("FM_REVIEW", collected)
-        assert missing == ["expected_handover_date"]
+        assert missing == []
 
     def test_get_missing_fields_integer_zero_is_not_missing(self) -> None:
         """0 is a valid value — must not appear in missing fields."""
@@ -341,6 +346,7 @@ class TestServiceRequestGraphState:
         "user_message",
         "attachments",
         "trace_id",
+        "conversation_history",
         "active_agent",
         "intent",
         "service_category",
@@ -359,6 +365,14 @@ class TestServiceRequestGraphState:
         "response_message",
         "response_ui",
         "status",
+        "action_override",
+        "corrected_fields",
+        # Role / auth context (added in Plan 01 — role-aware agents)
+        "user_role",
+        "auth",
+        # Runtime-injected services
+        "conversation_state_service",
+        "trace_manager",
     }
 
     def test_all_keys_declared(self) -> None:

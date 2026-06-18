@@ -18,6 +18,7 @@ export async function postServiceRequestChat(
   if (body.action) payload.action = body.action;
   if (body.selectedLeaseId) payload.selected_lease_id = body.selectedLeaseId;
   if (body.correctedFields) payload.corrected_fields = body.correctedFields;
+  if (body.userRole) payload.user_role = body.userRole;
 
   const res = await fetch(`${apiBase()}/chat/service-request`, {
     method: "POST",
@@ -42,10 +43,17 @@ export async function postServiceRequestChat(
     ? ({ ...data.draft_preview, message: "" } as import("@/lib/types/chat").ResponseUISRPreviewCard)
     : undefined;
 
+  // Extract state fields from the `state` envelope in the response.
+  const statePayload = data.state ?? {};
+
   return {
     sessionId: data.session_id,
     traceId: data.trace_id ?? undefined,
     responseUI,
     draftPreview,
+    workflowStage: statePayload.workflow_stage ?? null,
+    rddStatus: statePayload.rdd_status ?? null,
+    collectedData: statePayload.collected_data ?? null,
+    srId: data.draft_preview?.srId ?? null,
   };
 }

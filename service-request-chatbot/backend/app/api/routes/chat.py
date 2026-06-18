@@ -25,7 +25,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.security import get_auth_context
 from app.db.session import DbSession
@@ -73,8 +73,11 @@ class ServiceRequestChatRequest(BaseModel):
         examples=["user_456", "550e8400-e29b-41d4-a716-446655440001"],
     )
     message: str = Field(
-        min_length=1,
-        description="The user's natural-language message.",
+        default="",
+        description=(
+            "The user's natural-language message.  May be empty when ``action`` is "
+            "provided (action-only turns such as approve_fm_review or approve_rdd_final)."
+        ),
         examples=["I want to raise a handover request for Under Armour in Jawharat Jeddah"],
     )
     attachments: list[dict[str, Any]] = Field(
@@ -101,6 +104,18 @@ class ServiceRequestChatRequest(BaseModel):
         description="Inline field edits submitted from the confirmation card.  "
         "Values are merged into collected_data before validation.",
     )
+    user_role: str | None = Field(
+        default=None,
+        description="Caller's workflow role. Valid: MALL_MANAGER | FM_MANAGER | OPERATIONS | DD_ENGINEER",
+        examples=["FM_MANAGER", "DD_ENGINEER"],
+    )
+
+    @model_validator(mode="after")
+    def require_message_or_action(self) -> "ServiceRequestChatRequest":
+        """At least one of ``message`` (non-empty) or ``action`` must be supplied."""
+        if not self.message and not self.action:
+            raise ValueError("Either 'message' or 'action' must be provided.")
+        return self
 
 
 class ChatStatePayload(BaseModel):
@@ -110,6 +125,8 @@ class ChatStatePayload(BaseModel):
     workflow_stage: str | None = None
     missing_fields: list[str] = Field(default_factory=list)
     ready_to_submit: bool = False
+    rdd_status: str | None = None
+    collected_data: dict | None = None
 
 
 class ServiceRequestChatResponse(BaseModel):
@@ -186,6 +203,7 @@ async def post_service_request_chat(
             action=body.action,
             selected_lease_id=body.selected_lease_id,
             corrected_fields=body.corrected_fields,
+            user_role=body.user_role,
         )
     except Exception as exc:
         bound_log.exception("api.chat.service_request.unhandled_error", error=str(exc))
@@ -205,6 +223,8 @@ async def post_service_request_chat(
             workflow_stage=result.state.workflow_stage,
             missing_fields=result.state.missing_fields,
             ready_to_submit=result.state.ready_to_submit,
+            rdd_status=result.state.rdd_status,
+            collected_data=result.state.collected_data,
         ),
         trace_id=str(result.trace_id) if result.trace_id else None,
     )

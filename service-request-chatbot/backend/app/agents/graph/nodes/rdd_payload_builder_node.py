@@ -17,7 +17,10 @@ import logging
 from typing import Any
 
 from app.agents.graph.state import ServiceRequestState
-from app.agents.services.payload_builder_service import build_rdd_report_payload
+from app.agents.services.payload_builder_service import (
+    build_rdd_approve_payload,
+    build_rdd_report_payload,
+)
 from app.observability.decorators import trace_node
 
 logger = logging.getLogger(__name__)
@@ -25,17 +28,21 @@ logger = logging.getLogger(__name__)
 
 @trace_node("rdd_payload_builder", "AGENT")
 async def rdd_payload_builder_node(state: ServiceRequestState) -> dict[str, Any]:
-    """Build the RDD report submission payload and store it in backend_refs.
+    """Build the RDD submission payload and store it in backend_refs.
+
+    Branches on ``backend_refs["rdd_action"]``:
+      - ``"final_approve"`` → build PATCH APPROVED payload via build_rdd_approve_payload
+      - anything else       → build POST REPORT_SUBMITTED payload via build_rdd_report_payload
 
     Reads from state
     ----------------
-    ``collected_data``              — must contain date fields and guideLineLink.
+    ``collected_data``              — must contain date fields and guideLineLink (submit path).
     ``backend_refs``                — must contain ``sr_id``, ``create_payload``,
                                       ``uploaded_documents``, ``rdd_document_id``.
 
     Writes to state
     ---------------
-    ``backend_refs["rdd_payload"]`` — the built POST payload.
+    ``backend_refs["rdd_payload"]`` — the built payload.
     ``status``                      — ``"FAILED"`` when payload cannot be built.
     ``response_message``            — set on failure.
     """
@@ -48,12 +55,17 @@ async def rdd_payload_builder_node(state: ServiceRequestState) -> dict[str, Any]
         return {
             "status": "FAILED",
             "response_message": (
-                "Cannot build RDD report payload: service request ID is not available."
+                "Cannot build RDD payload: service request ID is not available."
             ),
         }
 
+    rdd_action: str = backend_refs.get("rdd_action", "submit")
+
     try:
-        payload = build_rdd_report_payload(collected_data, backend_refs)
+        if rdd_action == "final_approve":
+            payload = build_rdd_approve_payload(backend_refs)
+        else:
+            payload = build_rdd_report_payload(collected_data, backend_refs)
     except Exception as exc:
         logger.warning(
             "rdd_payload_builder_node: payload build failed — %s", exc, exc_info=True
@@ -61,11 +73,15 @@ async def rdd_payload_builder_node(state: ServiceRequestState) -> dict[str, Any]
         return {
             "status": "FAILED",
             "response_message": (
-                f"Could not build the RDD report payload: {exc}. "
-                "Please ensure all date fields and the report document are provided."
+                f"Could not build the RDD payload: {exc}. "
+                "Please ensure all required fields and the report document are provided."
             ),
         }
 
     backend_refs["rdd_payload"] = payload
-    logger.info("rdd_payload_builder_node: payload built for sr_id=%s", sr_id)
+    logger.info(
+        "rdd_payload_builder_node: payload built for sr_id=%s action=%s",
+        sr_id,
+        rdd_action,
+    )
     return {"backend_refs": backend_refs}
