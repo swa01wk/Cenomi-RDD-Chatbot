@@ -6,12 +6,62 @@ The backend agent system is built on [LangGraph](https://github.com/langchain-ai
 
 ---
 
+## Frontend / Backend Contract
+
+The frontend is a **generic conversational shell**. It does not select agents, does not identify intent, and does not control routing. The full pipeline — intent identification, agent routing, workflow continuation, validation, confirmation gating, payload construction, and API submission — belongs exclusively to the backend.
+
+### What the frontend sends
+
+Every chat turn carries only the following fields:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `session_id` | `str` | Identifies the conversation |
+| `message` | `str` | Raw user text |
+| `attachment_ids` | `list[str]` | Uploaded file references |
+| `selected_lease_id` | `str \| None` | User selection from a lease disambiguation UI |
+| `corrected_fields` | `dict \| None` | Inline field edits from a confirmation card |
+| `action` | `str \| None` | UI interaction: `"confirm"`, `"cancel"`, or omitted |
+
+### What the frontend must never send
+
+The following fields are owned by the backend and **must not be accepted from, or controlled by, the frontend**:
+
+- `active_agent` — resolved by the Agent Registry; persisted to the database and reloaded on the next turn.
+- `intent` — classified by the Supervisor Agent.
+- `service_category` / `sub_category` — extracted by the Supervisor; used deterministically by the registry for routing.
+- `workflow_stage` — advanced by backend graph nodes only.
+
+### How routing works (backend-owned)
+
+```
+User message
+  → Chat API
+  → Injection Guard
+  → ChatOrchestrationService
+  → Load Session State          ← routing fields loaded from DB, never from FE
+  → Intent Identification       ← Supervisor Agent (LLM classification)
+  → Agent Registry / Router     ← deterministic (service_category, sub_category) lookup
+  → Service Request Agent       ← e.g. Handover / FM / RDD
+  → Field Extraction / Validation / Confirmation / Payload Builder / API Submission
+  → Response Generation
+  → Save State                  ← active_agent, intent, workflow_stage persisted to DB
+```
+
+**Workflow continuation:** On subsequent turns where `active_agent` was already resolved and persisted by the backend, `load_session_node` routes directly to the agent's entry node, bypassing the Supervisor. This is backend-driven continuation — the frontend never instructs the backend to resume a specific agent.
+
+**LLM hint vs. registry:** The Supervisor may set a `target_agent` hint in its `SupervisorDecision` output. This hint is advisory only. The `registry_node` always performs a deterministic `(service_category, sub_category)` lookup and its result wins.
+
+**Extensibility:** The current product scope is Service Request / Handover. The Supervisor and Agent Registry are designed so that additional agents can be added in future by registering new `(service_category, sub_category)` entries — without any changes to the frontend contract.
+
+---
+
 ## Supervisor Agent
 
 **File:** `app/agents/graph/nodes/supervisor_node.py`  
 **Schema:** `app/agents/schemas/supervisor_schema.py`
 
-The supervisor runs at the beginning of every turn where no `active_agent` is set. It makes a single LLM call to classify the user's intent and, optionally, extract an initial `service_category` / `sub_category`.
+The Supervisor is the backend's entry point for **intent identification**. It runs at the beginning of every turn where no `active_agent` is set (i.e. the first turn of a new intent, or after a workflow restart). The frontend never identifies intent — it sends only the raw user message, and the Supervisor performs a single LLM call to classify intent and, optionally, extract an initial `service_category` / `sub_category`.
 
 **`SupervisorDecision` schema:**
 
@@ -60,11 +110,13 @@ SERVICE_REQUEST_AGENT_REGISTRY = {
 }
 ```
 
+The registry is the **deterministic source of truth for agent routing**. The frontend never selects an agent — the registry resolves it from `(service_category, sub_category)` produced by the Supervisor. Any LLM-provided `target_agent` hint in `SupervisorDecision` is advisory only; the registry result always wins.
+
 **`registry_node` logic:**
 
 1. Calls `lookup_agent(service_category, sub_category)`.
-2. If a registry entry is found, the registry result wins over any LLM-generated agent name — the registry is the single source of truth for agent routing.
-3. Sets `state["active_agent"]` and `state["schema_key"]`.
+2. If a registry entry is found, its result overrides any LLM-generated `target_agent` hint — the registry is the single source of truth for agent routing.
+3. Sets `state["active_agent"]` and `state["schema_key"]`, which are then persisted to the database by `save_state_node` and reloaded on the next turn for workflow continuation.
 4. If no match is found and no `active_agent` is set, routes to `response_generation` with an unsupported category message.
 
 ---

@@ -2,24 +2,32 @@
 
 ## High-Level Architecture
 
-The Service Request Chatbot is a full-stack application that allows Cenomi mall tenants to submit handover service requests through a conversational interface. A LangGraph-based multi-agent backend orchestrates the conversation, collects required data, validates it, and submits it to the Cenomi Service Request API.
+The Service Request Chatbot is a full-stack application that allows Cenomi mall tenants to submit service requests through a conversational interface. The frontend is a **generic conversational shell** — it does not select or invoke backend agents directly. A LangGraph-based multi-agent backend owns the full pipeline: intent identification, agent routing, data collection, validation, and API submission.
 
 ```mermaid
 graph TB
     subgraph Browser
-        FE[Next.js 15 App Router<br/>React 19 + Tailwind 3]
+        FE[Next.js Chat UI<br/>Generic Conversational Shell]
     end
 
     subgraph Backend["Backend (FastAPI + Python)"]
         API[API Layer<br/>FastAPI Routers]
-        ORCH[ChatOrchestrationService]
         GUARD[Injection Guard]
-        GRAPH[LangGraph Graph]
+        ORCH[ChatOrchestrationService]
+
+        subgraph Runtime["Agent Runtime / LangGraph"]
+            LOAD[Load Session State]
+            INTENT[Intent Identification<br/>Supervisor Agent]
+            ROUTER[Agent Router / Registry]
+            SR_AGENT[Service Request Agent<br/>Handover / FM / RDD]
+            RESP[Response Generation]
+        end
+
         OBS[TraceManager<br/>Observability]
     end
 
     subgraph Infra
-        PG[(PostgreSQL 16<br/>Primary Store)]
+        PG[(PostgreSQL 16<br/>Conversation + Draft State)]
         REDIS[(Redis 7<br/>Cache / Future)]
     end
 
@@ -30,29 +38,42 @@ graph TB
         UPLOAD[File Upload API]
     end
 
-    FE -->|POST /api/chat/service-request| API
-    FE -->|GET /api/observability/traces| API
+    FE -->|POST chat turn| API
     API --> GUARD
     GUARD --> ORCH
-    ORCH --> GRAPH
-    GRAPH -->|LLM calls| LLM
-    GRAPH -->|Lease lookup| LEASE
-    GRAPH -->|Submit SR| SR
+    ORCH --> LOAD
+    LOAD --> INTENT
+    INTENT -->|intent + service_category + sub_category| ROUTER
+    ROUTER -->|resolved active_agent| SR_AGENT
+    SR_AGENT --> RESP
+    RESP -->|assistant message + response_ui| FE
+
+    INTENT -->|classification call| LLM
+    SR_AGENT -->|field extraction / response generation| LLM
+    SR_AGENT -->|lease lookup| LEASE
+    SR_AGENT -->|submit/update request| SR
+
+    LOAD -.->|load state| PG
+    RESP -.->|save state| PG
     ORCH --> OBS
     OBS --> PG
-    ORCH --> PG
-    GRAPH -.->|state reload| PG
 ```
 
 **Key design decisions:**
 
+- **Generic frontend shell** — the frontend sends only the chat turn and UI interaction metadata (`session_id`, `message`, `attachment_ids`, `selected_lease_id`, `corrected_fields`, `action`). It does not send or control `active_agent`, `intent`, `service_category`, `sub_category`, or `workflow_stage`. The backend owns all routing decisions.
+- **Backend-owned intent identification** — the Supervisor Agent performs LLM-based intent classification on every new turn. The Agent Registry maps `(service_category, sub_category)` to a concrete agent deterministically; any LLM-provided `target_agent` hint is advisory only — the registry result wins.
+- **Workflow continuation** — on subsequent turns where `active_agent` was already resolved and persisted by the backend, `load_session_node` can route directly to the active agent's entry node, bypassing the Supervisor. This is backend-driven continuation, not frontend-selected routing.
 - **No LangGraph interrupt/resume** — each HTTP turn runs the full graph from scratch; conversation state is reloaded from PostgreSQL at the start of every turn via `ConversationStateService.load`.
 - **Stateless graph, stateful DB** — the LangGraph `ServiceRequestGraphState` is populated from the database at `load_session_node` and persisted at `save_state_node`.
 - **Pre-graph injection guard** — prompt injection scanning happens before the user message is persisted or the graph is invoked.
+- **Extensible agent routing** — the current product scope is Service Request / Handover, but the Agent Registry and Supervisor are designed to support additional agents in future without any changes to the frontend contract.
 
 ---
 
 ## Frontend Architecture
+
+The frontend is a **generic conversational shell**. It does not know which backend agent is active, does not select an agent, and does not drive workflow routing. All routing and agent lifecycle decisions belong to the backend.
 
 ```mermaid
 graph TD
@@ -63,7 +84,7 @@ graph TD
     Root --> Chat
     Root --> Admin
 
-    Chat --> SRC["ServiceRequestChat.tsx<br/>(main orchestrator)"]
+    Chat --> SRC["ServiceRequestChat.tsx<br/>(generic chat orchestrator)"]
     SRC --> MB["MessageBubble"]
     SRC --> CI["ChatInput"]
     SRC --> LC["LeaseCard"]
@@ -82,9 +103,29 @@ graph TD
 
 **State management:** Local React `useState` / `useCallback` in `ServiceRequestChat`. No Redux or Zustand. State tracked per component: `messages`, `sessionId`, `latestUI`, `workflowSteps`.
 
+**Frontend / Backend contract:**
+
+The frontend sends only the chat turn and UI interaction metadata. It **must not** send or attempt to control backend routing fields.
+
+| Field | Direction | Notes |
+|---|---|---|
+| `session_id` | FE → BE | Identifies the conversation |
+| `message` | FE → BE | Raw user text |
+| `attachment_ids` | FE → BE | Uploaded file references |
+| `selected_lease_id` | FE → BE | User-selected lease from disambiguation UI |
+| `corrected_fields` | FE → BE | Inline field edits from a confirmation card |
+| `action` | FE → BE | UI action: `"confirm"`, `"cancel"`, or omitted |
+
+The following fields are **owned exclusively by the backend** and must never be sent from the frontend:
+
+- `active_agent` — resolved by the Agent Registry; persisted and reloaded by the backend.
+- `intent` — classified by the Supervisor Agent.
+- `service_category` / `sub_category` — extracted by the Supervisor; used by the registry for routing.
+- `workflow_stage` — advanced by backend nodes; never set by the frontend.
+
 **API clients:**
 
-- `frontend/lib/api/chat-client.ts` — `postServiceRequestChat` sends `fetch` to `${NEXT_PUBLIC_API_BASE_URL}${NEXT_PUBLIC_API_V1_PREFIX}/chat/service-request` with fields: `session_id`, `message`, `attachment_ids`, `selected_lease_id`, `corrected_fields`, `action`.
+- `frontend/lib/api/chat-client.ts` — `postServiceRequestChat` sends `fetch` to `${NEXT_PUBLIC_API_BASE_URL}${NEXT_PUBLIC_API_V1_PREFIX}/chat/service-request` with the permitted fields above: `session_id`, `message`, `attachment_ids`, `selected_lease_id`, `corrected_fields`, `action`.
 - `frontend/lib/api/observability-client.ts` — `listTraces`, `getTrace` (at `/api/observability/...`), metrics at `/api/v1/observability/metrics/summary`.
 
 **URL prefix mismatch:** The frontend default `NEXT_PUBLIC_API_V1_PREFIX=/api/v1` targets `/api/v1/chat/service-request`, but the backend mounts the chat route at `/api/chat/service-request` (no v1 prefix). Set `NEXT_PUBLIC_API_V1_PREFIX=""` or adjust to match the backend. E2E tests use `/api/chat/service-request`.
@@ -134,17 +175,31 @@ graph TD
   - `GET /api/observability/...`
   - `GET /api/v1/observability/metrics/...`
 
-**`ChatOrchestrationService`** (`app/services/chat_orchestration_service.py`) is the central coordinator:
+**`ChatOrchestrationService`** (`app/services/chat_orchestration_service.py`) is the central coordinator. It owns the full pipeline — from receiving the raw chat turn to returning a response — without delegating any routing decisions to the frontend:
 
 1. Load or create `ChatSession` via `ChatSessionRepository`.
 2. `TraceManager.start_trace` — creates `AgentTrace` row.
 3. Audit `turn.started` via `AuditLogRepository`.
 4. `scan_message` — short-circuits to refusal response on high-risk injection.
 5. `ChatMessageRepository.create` — persist user message.
-6. Build initial `ServiceRequestGraphState` with session fields (`active_agent`, `intent`, `workflow_stage`) from `ConversationStateService.load`.
-7. `get_compiled_graph().ainvoke(initial_state)`.
+6. Build initial `ServiceRequestGraphState` with session fields (`active_agent`, `intent`, `workflow_stage`, `service_category`, `sub_category`) loaded from `ConversationStateService.load`. These routing fields are **loaded from the database**, not accepted from the frontend request.
+7. `get_compiled_graph().ainvoke(initial_state)` — runs the LangGraph pipeline: Load Session State → Supervisor (intent identification) → Agent Registry (routing) → Service Request Agent → Response Generation → Save State.
 8. `TraceManager.finish_trace` with `final_state`.
 9. Persist assistant message, `_sync_session` updates `ChatSession`, audit `turn.completed`.
+
+**Backend ownership summary:**
+
+| Responsibility | Owner |
+|---|---|
+| Intent identification | Supervisor Agent (LLM classification) |
+| `service_category` / `sub_category` extraction | Supervisor Agent |
+| Agent routing | Agent Registry (deterministic lookup) |
+| `active_agent` lifecycle | Backend — resolved by registry, persisted to DB, reloaded on next turn |
+| Workflow continuation | Backend — `load_session_node` routes to active agent when `active_agent` is already set |
+| Field validation | `ValidationService` (code, not LLM) |
+| Confirmation gating | `handover_entry_node` (keyword matching + UI action) |
+| Payload construction | `PayloadBuilderService` |
+| API submission | `api_submission_node` |
 
 **Config** (`app/core/config.py`): `Settings` reads from `.env` / `.env.local`. Key fields: `database_url`, `redis_url`, `openai_api_key`, `llm_model`, `service_request_api_base_url`, `lease_tenant_api_base_url`, `file_upload_api_base_url`, `jwt_secret_key`, `llm_confidence_threshold` (default `0.6`).
 
