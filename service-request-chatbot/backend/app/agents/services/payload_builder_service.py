@@ -172,9 +172,20 @@ def _to_ddmmyyyy(iso_date_str: str) -> str:
     return iso_date_str
 
 
-def _fm_document_status_entry(doc_id: str) -> dict[str, Any]:
-    """Build a single document_status_map entry for an FM document."""
-    return {
+def _fm_document_status_entry(
+    doc_id: str,
+    expected_handover_date: str = "",
+    unit_readiness_date: str = "",
+) -> dict[str, Any]:
+    """Build a single document_status_map entry for an FM document.
+
+    ``expected_handover_date`` is omitted from FM Save Progress entries (platform
+    does not include it there), but is required for FM Approve, RDD Submit, and
+    RDD Final Approve — pass it when building those payloads.
+
+    ``unit_readiness_date`` is only required in the RDD Final Approve FM doc entry.
+    """
+    entry: dict[str, Any] = {
         "id": doc_id,
         "document_status": "",
         "handover_date": "",
@@ -183,6 +194,11 @@ def _fm_document_status_entry(doc_id: str) -> dict[str, Any]:
         "fitout_end_date": "",
         "trading_date": "",
     }
+    if expected_handover_date:
+        entry["expected_handover_date"] = expected_handover_date
+    if unit_readiness_date:
+        entry["unit_readiness_date"] = unit_readiness_date
+    return entry
 
 
 def _rdd_document_status_entry(
@@ -277,28 +293,36 @@ def build_fm_approve_payload(
 ) -> dict[str, Any]:
     """Build the PATCH payload for FM_REVIEW approval (status=APPROVED).
 
-    Same shape as save-progress but with ``status="APPROVED"`` and an
-    optional ``comment`` field.  Top-level ``lease_code``/``lease_id`` are
-    omitted per the Postman collection shape for approval.
+    Differences from save-progress per Postman contract:
+    - ``current_sr_status`` is the pre-action state (``"IN_PROCESS"``), not the
+      desired new state — the platform uses this as a pre-condition check.
+    - FM doc entries gain ``expected_handover_date`` (set after unit_readiness_date
+      is known; absent in the save-progress doc entries).
+    - Top-level shape: ``user_action``, ``comment``, ``title``, ``sub_category``
+      only — no ``service_category``, ``lease_code``, ``lease_id``, or IDs.
     """
     base = build_fm_review_payload(data, backend_refs)
 
     sr_id: str = backend_refs.get("sr_id", "")
     uploaded_docs: list[str] = backend_refs.get("uploaded_documents") or []
+    expected_handover_date: str = data.get("expected_handover_date", "")
+
     inner = dict(base.get("payload") or {})
-    inner["current_sr_status"] = "APPROVED"
-    if comment:
-        inner["comment"] = comment
+    # current_sr_status = pre-action state (the SR is currently IN_PROCESS)
+    inner["current_sr_status"] = "IN_PROCESS"
+    # Rebuild doc entries with expected_handover_date (added at approve stage)
+    inner["document_status_map"] = [
+        _fm_document_status_entry(doc_id, expected_handover_date=expected_handover_date)
+        for doc_id in uploaded_docs
+    ]
 
     return {
         "payload": inner,
-        "title": base.get("title", ""),
-        "tenant_profile_id": base.get("tenant_profile_id"),
-        "property_id": base.get("property_id"),
-        "service_category": "FIT_OUT_AND_HANDOVER",
-        "sub_category": "HANDOVER",
-        "service_request_id": sr_id,
+        "user_action": None,
         "status": "APPROVED",
+        "comment": comment,
+        "title": inner.get("title", ""),
+        "sub_category": "HANDOVER",
     }
 
 
@@ -335,7 +359,15 @@ def build_rdd_report_payload(
     if rdd_doc_id and rdd_doc_id not in all_doc_ids:
         all_doc_ids.append(rdd_doc_id)
 
-    fm_status_map = [_fm_document_status_entry(doc_id) for doc_id in fm_doc_ids]
+    expected_handover_date: str = data.get(
+        "expected_handover_date", inner.get("expected_handover_date", "")
+    )
+
+    # FM doc entries include expected_handover_date at this stage (set after FM approve)
+    fm_status_map = [
+        _fm_document_status_entry(doc_id, expected_handover_date=expected_handover_date)
+        for doc_id in fm_doc_ids
+    ]
     rdd_status_entry = (
         _rdd_document_status_entry(
             doc_id=rdd_doc_id,
@@ -349,16 +381,23 @@ def build_rdd_report_payload(
     )
     document_status_map = fm_status_map + ([rdd_status_entry] if rdd_status_entry else [])
 
+    sr_operations: list[dict[str, Any]] = backend_refs.get("sr_operations") or []
+    ref_no: str = backend_refs.get("ref_no", sr_id)
+
     rdd_inner: dict[str, Any] = {
         **inner,
         "guideLineLink": data.get("guideLineLink", ""),
         "documents_ids": all_doc_ids,
         "document_status_map": document_status_map,
         "unit_readiness_date": data.get("unit_readiness_date", inner.get("unit_readiness_date", "")),
-        "expected_handover_date": data.get(
-            "expected_handover_date", inner.get("expected_handover_date", "")
-        ),
+        "expected_handover_date": expected_handover_date,
         "sr_id": sr_id,
+        "ref_no": ref_no,
+        # current_sr_status is the pre-action state (SR is IN_PROCESS before submit)
+        "current_sr_status": "IN_PROCESS",
+        "document_saved": True,
+        "document_id": "",
+        "sr_operations": sr_operations,
         "user_action": None,
     }
 
@@ -408,7 +447,10 @@ def build_rdd_approve_payload(
         "payload": {
             "comment": comment,
             "user_action": None,
-            "current_sr_status": "APPROVED",
+            # The platform uses current_sr_status as a pre-condition check —
+            # it must reflect the state the SR is in *before* this action.
+            # The SR is in REPORT_SUBMITTED when the RDD PM triggers final approve.
+            "current_sr_status": "REPORT_SUBMITTED",
             "sr_id": sr_id,
         },
         "status": "APPROVED",

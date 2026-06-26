@@ -154,10 +154,12 @@ class TestBuildRddApprovePayload:
         payload = build_rdd_approve_payload(refs)
         assert payload["status"] == "APPROVED"
 
-    def test_inner_payload_current_sr_status_is_approved(self) -> None:
+    def test_inner_payload_current_sr_status_is_report_submitted(self) -> None:
+        # current_sr_status is the pre-condition value (state before this action),
+        # matching the Postman collection contract for the PATCH final approve call.
         refs = {"sr_id": "sr-001", "tenant_profile_id": 99, "property_id": 5}
         payload = build_rdd_approve_payload(refs)
-        assert payload["payload"]["current_sr_status"] == "APPROVED"
+        assert payload["payload"]["current_sr_status"] == "REPORT_SUBMITTED"
 
     def test_service_request_id_matches_sr_id(self) -> None:
         refs = {"sr_id": "sr-xyz-001"}
@@ -247,7 +249,7 @@ class TestRDDPayloadBuilderBranching:
 
         payload = result["backend_refs"]["rdd_payload"]
         assert payload["status"] == "APPROVED"
-        assert payload["payload"]["current_sr_status"] == "APPROVED"
+        assert payload["payload"]["current_sr_status"] == "REPORT_SUBMITTED"
 
     @pytest.mark.asyncio
     async def test_submit_action_builds_report_payload(self) -> None:
@@ -299,7 +301,7 @@ class TestRDDApiSubmissionFinalApprove:
     async def test_final_approve_calls_patch_not_submit(self) -> None:
         backend_refs = _rdd_backend_refs(
             rdd_action="final_approve",
-            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "APPROVED"}},
+            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "REPORT_SUBMITTED"}},
         )
         state = _state(backend_refs=backend_refs, auth=_dd_engineer_auth())
 
@@ -320,7 +322,7 @@ class TestRDDApiSubmissionFinalApprove:
     async def test_final_approve_success_sets_sr_completed(self) -> None:
         backend_refs = _rdd_backend_refs(
             rdd_action="final_approve",
-            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "APPROVED"}},
+            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "REPORT_SUBMITTED"}},
         )
         state = _state(backend_refs=backend_refs, auth=_dd_engineer_auth())
 
@@ -337,7 +339,7 @@ class TestRDDApiSubmissionFinalApprove:
     async def test_final_approve_success_sets_rdd_status_approved(self) -> None:
         backend_refs = _rdd_backend_refs(
             rdd_action="final_approve",
-            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "APPROVED"}},
+            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "REPORT_SUBMITTED"}},
         )
         state = _state(backend_refs=backend_refs, auth=_dd_engineer_auth())
 
@@ -353,7 +355,7 @@ class TestRDDApiSubmissionFinalApprove:
     async def test_final_approve_api_failure_returns_failed(self) -> None:
         backend_refs = _rdd_backend_refs(
             rdd_action="final_approve",
-            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "APPROVED"}},
+            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "REPORT_SUBMITTED"}},
         )
         state = _state(backend_refs=backend_refs, auth=_dd_engineer_auth())
 
@@ -370,7 +372,7 @@ class TestRDDApiSubmissionFinalApprove:
     async def test_final_approve_non_dd_role_denied(self) -> None:
         backend_refs = _rdd_backend_refs(
             rdd_action="final_approve",
-            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "APPROVED"}},
+            rdd_payload={"status": "APPROVED", "payload": {"current_sr_status": "REPORT_SUBMITTED"}},
         )
         state = _state(backend_refs=backend_refs, auth=_fm_manager_auth())
 

@@ -264,14 +264,15 @@ class TestRDDPhase3bFinalApprove:
 
         result = await rdd_payload_builder_node(state)
         assert result["backend_refs"]["rdd_payload"]["status"] == "APPROVED"
-        assert result["backend_refs"]["rdd_payload"]["payload"]["current_sr_status"] == "APPROVED"
+        # current_sr_status is the pre-action state (Postman contract)
+        assert result["backend_refs"]["rdd_payload"]["payload"]["current_sr_status"] == "REPORT_SUBMITTED"
 
     @pytest.mark.asyncio
     async def test_final_approve_success_sets_sr_completed(self) -> None:
         state = _base_rdd_state(rdd_action="final_approve")
         state["backend_refs"]["rdd_payload"] = {
             "status": "APPROVED",
-            "payload": {"current_sr_status": "APPROVED", "sr_id": "sr-rdd-integ-001"},
+            "payload": {"current_sr_status": "REPORT_SUBMITTED", "sr_id": "sr-rdd-integ-001"},
         }
 
         with patch(
@@ -290,7 +291,7 @@ class TestRDDPhase3bFinalApprove:
         state = _base_rdd_state(rdd_action="final_approve")
         state["backend_refs"]["rdd_payload"] = {
             "status": "APPROVED",
-            "payload": {"current_sr_status": "APPROVED"},
+            "payload": {"current_sr_status": "REPORT_SUBMITTED"},
         }
 
         with patch(
@@ -308,7 +309,7 @@ class TestRDDPhase3bFinalApprove:
         state = _base_rdd_state(rdd_action="final_approve")
         state["backend_refs"]["rdd_payload"] = {
             "status": "APPROVED",
-            "payload": {"current_sr_status": "APPROVED"},
+            "payload": {"current_sr_status": "REPORT_SUBMITTED"},
         }
 
         mock_svc = AsyncMock()
@@ -329,7 +330,7 @@ class TestRDDPhase3bFinalApprove:
         state = _base_rdd_state(rdd_action="final_approve")
         state["backend_refs"]["rdd_payload"] = {
             "status": "APPROVED",
-            "payload": {"current_sr_status": "APPROVED"},
+            "payload": {"current_sr_status": "REPORT_SUBMITTED"},
         }
 
         with patch(
@@ -349,7 +350,7 @@ class TestRDDPhase3bFinalApprove:
         state["auth"] = _fm_auth()
         state["backend_refs"]["rdd_payload"] = {
             "status": "APPROVED",
-            "payload": {"current_sr_status": "APPROVED"},
+            "payload": {"current_sr_status": "REPORT_SUBMITTED"},
         }
 
         with patch(
@@ -406,6 +407,7 @@ class TestRDDChainedPhase3aTo3b:
         state_3b["backend_refs"].update(approve_pb["backend_refs"])
 
         assert state_3b["backend_refs"]["rdd_payload"]["status"] == "APPROVED"
+        assert state_3b["backend_refs"]["rdd_payload"]["payload"]["current_sr_status"] == "REPORT_SUBMITTED"
 
         # Final approve
         with patch(
