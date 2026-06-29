@@ -31,7 +31,23 @@ from uuid import UUID
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.graph.service_request_graph import get_compiled_graph
+from app.agents.graph.helper_agent_graph import get_compiled_helper_graph
+from app.types.chat import AuthContext
+
+# Backward-compat alias — tests patch app.services.chat_orchestration_service.get_compiled_graph
+get_compiled_graph = get_compiled_helper_graph
+
+
+def _build_auth_context(role: str | None) -> AuthContext:
+    """Build an AuthContext from a role string using the ROLE_PERMISSION_MAP.
+
+    Used by tests and internal utilities to construct a typed AuthContext
+    without needing a real JWT. Returns empty-roles AuthContext for unknown
+    or None roles.
+    """
+    from app.agents.services.permission_service import ROLE_PERMISSION_MAP
+    roles: frozenset[str] = ROLE_PERMISSION_MAP.get(role or "", frozenset()) if role else frozenset()
+    return AuthContext(subject_id="chat_user", tenant_id=None, roles=roles)
 from app.agents.services.conversation_state_service import ConversationStateService
 from app.core.injection_guard import scan_message
 from app.db.models import ChatSession
@@ -39,6 +55,7 @@ from app.db.repositories.audit_log_repo import AuditLogRepository
 from app.db.repositories.chat_message_repo import ChatMessageRepository
 from app.db.repositories.chat_session_repo import ChatSessionRepository
 from app.observability.trace_manager import TraceManager
+from app.types.chat import AuthContext
 
 log = structlog.get_logger(__name__)
 
@@ -97,6 +114,8 @@ class ChatOrchestrationService:
         action: str | None = None,
         selected_lease_id: str | None = None,
         corrected_fields: dict[str, Any] | None = None,
+        auth_context: AuthContext | None = None,
+        sr_id: str | None = None,
     ) -> ChatTurnResult:
         """Execute one complete chat turn and return structured result."""
 
@@ -221,6 +240,8 @@ class ChatOrchestrationService:
             "active_agent": chat_session.active_agent,
             "intent": chat_session.intent,
             "workflow_stage": chat_session.workflow_stage,
+            # RBAC — injected from JWT, never from frontend request body
+            "auth_context": auth_context,
         }
 
         # Inject UI-layer overrides so graph nodes can act on explicit button
@@ -231,6 +252,11 @@ class ChatOrchestrationService:
             initial_state["corrected_fields"] = corrected_fields
         if selected_lease_id:
             initial_state["selected_lease"] = {"id": selected_lease_id}
+        # sr_id passed by frontend when FM/DD opens an existing SR
+        if sr_id:
+            backend_refs = dict(initial_state.get("backend_refs") or {})
+            backend_refs["sr_id"] = sr_id
+            initial_state["backend_refs"] = backend_refs
 
         # 6. Invoke graph -------------------------------------------------------
         result_state: dict[str, Any]
@@ -333,7 +359,7 @@ class ChatOrchestrationService:
         sr_id = (result_state.get("backend_refs") or {}).get("sr_id")
         draft_preview: dict[str, Any] | None = None
         if collected:
-            from app.agents.graph.nodes.preview_node import _fields_from_collected
+            from app.agents.graph.nodes.handover.preview_node import _fields_from_collected
             draft_preview = {
                 "type": "sr_preview_card",
                 "requestType": "Handover Service Request",

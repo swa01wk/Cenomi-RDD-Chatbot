@@ -519,6 +519,17 @@ class ServiceRequestPlatformClient:
             headers = {**self._auth_headers(), "Content-Type": "application/json"}
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(endpoint, json=payload, headers=headers)
+
+            # ── 401 reactive re-auth: token may have expired before TTL ──────
+            if response.status_code == 401:
+                log.info("platform_client.post.401_retry_after_reauth", endpoint=endpoint)
+                self._token_acquired_at = 0.0  # force token refresh
+                if await self.ensure_authenticated():
+                    headers = {**self._auth_headers(), "Content-Type": "application/json"}
+                    wall_start = time.monotonic()
+                    async with httpx.AsyncClient(timeout=self._timeout) as client:
+                        response = await client.post(endpoint, json=payload, headers=headers)
+
             latency_ms = int((time.monotonic() - wall_start) * 1000)
             body = self._parse_body(response)
             correlation_id = self._extract_correlation(response, body)
@@ -554,6 +565,17 @@ class ServiceRequestPlatformClient:
             headers = {**self._auth_headers(), "Content-Type": "application/json"}
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.patch(endpoint, json=payload, headers=headers)
+
+            # ── 401 reactive re-auth ──────────────────────────────────────────
+            if response.status_code == 401:
+                log.info("platform_client.patch.401_retry_after_reauth", endpoint=endpoint)
+                self._token_acquired_at = 0.0
+                if await self.ensure_authenticated():
+                    headers = {**self._auth_headers(), "Content-Type": "application/json"}
+                    wall_start = time.monotonic()
+                    async with httpx.AsyncClient(timeout=self._timeout) as client:
+                        response = await client.patch(endpoint, json=payload, headers=headers)
+
             latency_ms = int((time.monotonic() - wall_start) * 1000)
             body = self._parse_body(response)
             correlation_id = self._extract_correlation(response, body)

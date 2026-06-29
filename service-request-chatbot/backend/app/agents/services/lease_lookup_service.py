@@ -61,6 +61,11 @@ class LeaseLookupQuery(BaseModel):
     lease_code: str | None = None
     brand: str | None = None
     mall: str | None = None
+    # Optional: restrict results to the authenticated user's properties.
+    # Passed as a repeated query param to the real Lease/Tenant API so that
+    # a Mall Manager at Jawharat Jeddah cannot see leases from other malls.
+    # Ignored by MockLeaseLookupService (mock data is already scoped).
+    property_ids: list[int] | None = None
 
     def has_identifiers(self) -> bool:
         """Return True when at least one search field is non-empty."""
@@ -189,14 +194,18 @@ class HttpLeaseLookupService(AbstractLeaseLookupService):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _build_params(query: LeaseLookupQuery) -> dict[str, str]:
-        params: dict[str, str] = {}
+    def _build_params(query: LeaseLookupQuery) -> dict[str, Any]:
+        params: dict[str, Any] = {}
         if query.lease_code:
             params["lease_code"] = query.lease_code
         if query.brand:
             params["brand"] = query.brand
         if query.mall:
             params["mall"] = query.mall
+        # Forward the user's property scope to the platform so the response is
+        # pre-filtered to leases the user is authorised to manage.
+        if query.property_ids:
+            params["property_id"] = query.property_ids  # httpx repeats list params
         return params
 
     @staticmethod

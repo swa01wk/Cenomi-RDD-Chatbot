@@ -70,6 +70,7 @@ CREATE_SR_STAGE = StageDefinition(
         "brand_id",
         "mall",
         "brand",
+        "lease",          # display label for the lease (same as lease_code; backend-derived)
         "unit_codes",
         "city",
         "contracted_area",
@@ -87,7 +88,8 @@ FM_REVIEW_STAGE = StageDefinition(
     role="FM_MANAGER",
     required_fields=(
         "unit_readiness_date",
-        "expected_handover_date",
+        # expected_handover_date is auto-computed as unit_readiness_date + 7 days
+        # by merge_state_node. It is NOT asked of the user.
     ),
     required_documents=(
         "SR_HANDOVER_CHECKLIST",
@@ -138,6 +140,7 @@ BACKEND_DERIVED_FIELDS: frozenset[str] = frozenset(
         "brand_id",
         "mall",
         "brand",
+        "lease",          # display label set alongside lease_code during lease resolution
         "unit_codes",
         "city",
         "contracted_area",
@@ -167,6 +170,12 @@ RDD_REQUIRED_DOCUMENTS: tuple[str, ...] = RDD_REVIEW_STAGE.required_documents
 ALL_DOCUMENT_TYPES: frozenset[str] = frozenset(
     FM_ALLOWED_DOCUMENTS + RDD_REQUIRED_DOCUMENTS
 )
+
+# ── Auto-computed (backend-computed) field set ────────────────────────────────
+# Fields whose values are derived from other collected data by merge_state_node.
+# These are never asked of the user directly.
+# Re-exported here so that tests and services can import from the schema module.
+from app.agents.graph.nodes.handover.merge_state_node import BACKEND_COMPUTED_FIELDS  # noqa: E402
 
 # ── Permission map: role → stages the role may act on ────────────────────────
 
@@ -261,9 +270,10 @@ EXTRACTABLE_FIELDS: frozenset[str] = frozenset(
         "lease_code",
         "mall",
         "brand",
-        # "title" is intentionally excluded: the system auto-generates it as
-        # "handover-{lease_code}-{description_slug}".  The LLM must not attempt
-        # to extract or override it from user input.
+        # "title" is extractable: the user may provide their own title.
+        # If not provided, merge_state_node auto-generates it as
+        # "handover-{lease_code}-{description_slug}".
+        "title",
         "description",
         "startDate",
         "endDate",

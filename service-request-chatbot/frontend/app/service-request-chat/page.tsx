@@ -1,4 +1,5 @@
 import { ServiceRequestChat } from "@/components/chatbot/ServiceRequestChat";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 export const metadata = {
   title: "Service Request – Cenomi",
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function ServiceRequestChatPage() {
-  return <ServiceRequestChat />;
+  return (
+    <AuthGuard>
+      <ServiceRequestChat />
+    </AuthGuard>
+  );
 }

@@ -384,6 +384,60 @@ def build_rdd_report_payload(
     return payload
 
 
+def build_rdd_approve_payload(
+    backend_refs: dict[str, Any],
+    comment: str = "",
+) -> dict[str, Any]:
+    """Build the PATCH payload for RDD final approval (status=APPROVED after REPORT_SUBMITTED).
+
+    Parameters
+    ----------
+    backend_refs:
+        ``backend_refs`` from graph state; must include ``sr_id`` and
+        ``create_payload`` (the original CREATE_SR payload shape).
+        Direct ID keys in ``backend_refs`` (e.g. ``tenant_profile_id``,
+        ``property_id``) take precedence over those in ``create_payload``.
+    comment:
+        Optional approver comment to include in the payload.
+
+    Returns
+    -------
+    dict
+        PATCH body ready for ``PlatformAPIClient.patch_service_request``.
+    """
+    sr_id: str = backend_refs.get("sr_id", "")
+    create_payload: dict[str, Any] = backend_refs.get("create_payload") or {}
+    inner: dict[str, Any] = create_payload.get("payload") or {}
+
+    # Direct backend_refs IDs take precedence over create_payload values
+    tenant_profile_id = backend_refs.get("tenant_profile_id") or inner.get("tenant_profile_id") or create_payload.get("tenant_profile_id")
+    property_id = backend_refs.get("property_id") or inner.get("property_id") or create_payload.get("property_id")
+
+    approved_inner: dict[str, Any] = {
+        **inner,
+        "sr_id": sr_id,                     # sr_id in inner payload
+        "comment": comment,                  # comment in inner payload
+        "current_sr_status": "REPORT_SUBMITTED",
+        "user_action": None,
+    }
+
+    payload: dict[str, Any] = {
+        "payload": approved_inner,
+        "title": inner.get("title", ""),
+        "tenant_profile_id": tenant_profile_id,
+        "property_id": property_id,
+        "service_category": "FIT_OUT_AND_HANDOVER",
+        "sub_category": "HANDOVER",
+        "lease_code": inner.get("lease", create_payload.get("lease_code", "")),
+        "lease_id": create_payload.get("lease_id"),
+        "service_request_id": sr_id,
+        "status": "APPROVED",
+    }
+
+    logger.debug("build_rdd_approve_payload: built for sr_id=%s", sr_id)
+    return payload
+
+
 # ── PayloadBuilderService class (DI / backward-compatible wrapper) ────────────
 
 

@@ -631,3 +631,115 @@ class TestFieldExtractionNode:
         call_args = gateway.complete_json.call_args
         user_msg = call_args[1]["user_message"] if call_args[1] else call_args[0][1]
         assert "FM_REVIEW" in user_msg
+
+
+# ---------------------------------------------------------------------------
+# WorkflowConfig integration — system_prompt param (new tests)
+# ---------------------------------------------------------------------------
+
+
+class TestFieldExtractionWorkflowConfig:
+    """Verify field_extraction_node passes per-workflow extraction prompt."""
+
+    @pytest.mark.asyncio
+    async def test_custom_system_prompt_used_when_workflow_config_present(self) -> None:
+        """Node passes workflow_cfg.extraction_prompt to FieldExtractionService.extract()."""
+        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.services.field_extraction_service import FieldExtractionService
+        from app.agents.prompts.handover_extraction_prompt import HANDOVER_EXTRACTION_SYSTEM_PROMPT
+        from app.agents.schemas.handover_schema import HandoverExtractedFields, ExtractionTraceMeta
+
+        state = _base_state(
+            user_message="custom workflow message",
+            active_agent="handover_service_request_agent",
+        )
+
+        captured_kwargs: list[dict] = []
+
+        async def mock_extract(self_svc, user_message, workflow_stage=None,
+                               recent_history=None, missing_fields=None,
+                               system_prompt=None):
+            captured_kwargs.append({"system_prompt": system_prompt})
+            return HandoverExtractedFields(), ExtractionTraceMeta(parse_success=True)
+
+        with patch.object(FieldExtractionService, "extract", mock_extract):
+            await field_extraction_node(state)
+
+        assert captured_kwargs, "extract was never called"
+        # The prompt must be from the handover WorkflowConfig (= HANDOVER_EXTRACTION_SYSTEM_PROMPT)
+        assert captured_kwargs[0]["system_prompt"] == HANDOVER_EXTRACTION_SYSTEM_PROMPT
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_handover_prompt_when_no_active_agent(self) -> None:
+        """active_agent=None → no WorkflowConfig → system_prompt=None → handover default."""
+        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.services.field_extraction_service import FieldExtractionService
+        from app.agents.schemas.handover_schema import HandoverExtractedFields, ExtractionTraceMeta
+
+        state = _base_state(user_message="some message")
+        state.pop("active_agent", None)
+
+        captured_kwargs: list[dict] = []
+
+        async def mock_extract(self_svc, user_message, workflow_stage=None,
+                               recent_history=None, missing_fields=None,
+                               system_prompt=None):
+            captured_kwargs.append({"system_prompt": system_prompt})
+            return HandoverExtractedFields(), ExtractionTraceMeta(parse_success=True)
+
+        with patch.object(FieldExtractionService, "extract", mock_extract):
+            await field_extraction_node(state)
+
+        assert captured_kwargs, "extract was never called"
+        # No active_agent → no WorkflowConfig → system_prompt=None (service uses default)
+        assert captured_kwargs[0]["system_prompt"] is None
+
+    @pytest.mark.asyncio
+    async def test_custom_prompt_passed_through_service(self) -> None:
+        """FieldExtractionService.extract(system_prompt=...) passes it to gateway."""
+        from app.agents.services.field_extraction_service import FieldExtractionService
+        from app.agents.llm.gateway import LLMGateway
+
+        custom_prompt = "My custom extraction prompt for Work Permit"
+        response_dict = {"fields": {}, "summary": "ok"}
+        captured: list[str] = []
+
+        gateway = MagicMock(spec=LLMGateway)
+        gateway.model = "gpt-5.4-mini"
+
+        async def mock_complete(system_prompt: str, user_message: str) -> tuple:
+            captured.append(system_prompt)
+            return response_dict, 10, 5, 50
+
+        gateway.complete_json = mock_complete
+
+        svc = FieldExtractionService(gateway=gateway)
+        await svc.extract("user message", system_prompt=custom_prompt)
+
+        assert captured, "complete_json was never called"
+        assert captured[0] == custom_prompt
+
+    @pytest.mark.asyncio
+    async def test_service_falls_back_to_handover_when_system_prompt_none(self) -> None:
+        """system_prompt=None → HANDOVER_EXTRACTION_SYSTEM_PROMPT used."""
+        from app.agents.services.field_extraction_service import FieldExtractionService
+        from app.agents.llm.gateway import LLMGateway
+        from app.agents.prompts.handover_extraction_prompt import HANDOVER_EXTRACTION_SYSTEM_PROMPT
+
+        response_dict = {"fields": {}, "summary": "ok"}
+        captured: list[str] = []
+
+        gateway = MagicMock(spec=LLMGateway)
+        gateway.model = "gpt-5.4-mini"
+
+        async def mock_complete(system_prompt: str, user_message: str) -> tuple:
+            captured.append(system_prompt)
+            return response_dict, 10, 5, 50
+
+        gateway.complete_json = mock_complete
+
+        svc = FieldExtractionService(gateway=gateway)
+        await svc.extract("user message", system_prompt=None)
+
+        assert captured, "complete_json was never called"
+        assert captured[0] == HANDOVER_EXTRACTION_SYSTEM_PROMPT

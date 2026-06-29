@@ -1,7 +1,15 @@
-# Chatbot Test Queries — Handover Service Request
+# Chatbot Test Queries — Helper Agent (Handover Service Request)
 
-> **Purpose:** Exhaustive catalogue of chat inputs to manually or programmatically test the chatbot across happy paths, edge cases, adversarial inputs, and broken/invalid combinations.  
-> **Mock leases available:**
+> **Purpose:** Exhaustive catalogue of chat inputs to manually or programmatically test the Helper Agent across happy paths, edge cases, adversarial inputs, and broken/invalid combinations.
+>
+> **What changed from the previous version:**
+> - Login is now required — every request must include `Authorization: Bearer <token>`
+> - The supervisor has a new `ASK_HELP` intent — questions and greetings route to the FAQ node, not to an SR clarification prompt
+> - RBAC enforcement — role mismatches return a role-appropriate explanation, not an SR workflow
+> - `user_id` in the request body is now a fallback only — the JWT `sub` claim takes precedence
+> - New `sr_id` field in the request body — passed by FM Manager / DD Engineer when opening an existing SR
+>
+> **Mock leases available (seed data):**
 >
 > | Code | Brand | Mall | City | Units | Area |
 > |---|---|---|---|---|---|
@@ -9,6 +17,54 @@
 > | `t0208831` | Nike | Riyadh Park | Riyadh | GF101, GF102 | 680 |
 > | `t0301144` | Nike | Mall of Arabia | Jeddah | LG220 | 510 |
 > | `t0419977` | Zara | Dubai Festival City | Dubai | UF301 | 900 |
+>
+> **Test users (seed with `python scripts/seed_users.py`, password: `test1234`):**
+>
+> | Username | Role | Can do |
+> |---|---|---|
+> | `aisha@cenomi.com` | MALL_MANAGER | Create SRs, check status, Q&A |
+> | `khalid@cenomi.com` | FM_MANAGER | FM review, approve/reject, Q&A |
+> | `omar@cenomi.com` | OPERATIONS | FM review, save progress, Q&A |
+> | `sara@cenomi.com` | DD_ENGINEER | RDD review, submit report, Q&A |
+> | `admin@cenomi.com` | ADMIN | All actions |
+
+---
+
+## 0. Authentication (Required Before All Tests)
+
+### Get a token
+
+```bash
+# Login as Mall Manager
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"aisha@cenomi.com","password":"test1234"}' \
+  | jq -r '.access_token')
+echo "TOKEN: $TOKEN"
+
+# Login as FM Manager
+FM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"khalid@cenomi.com","password":"test1234"}' \
+  | jq -r '.access_token')
+
+# Login as DD Engineer
+DD_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"sara@cenomi.com","password":"test1234"}' \
+  | jq -r '.access_token')
+```
+
+All subsequent curl commands use `-H "Authorization: Bearer $TOKEN"` (substitute `$FM_TOKEN` or `$DD_TOKEN` as appropriate for each role).
+
+### Verify token claims
+
+```bash
+curl -s http://localhost:8000/api/auth/me \
+  -H "Authorization: Bearer $TOKEN" | jq '.'
+```
+
+**Expected:** `{ "user_id": "...", "role": "MALL_MANAGER", "roles": ["MALL_MANAGER"], "mall_names": ["Jawharat Jeddah"], ... }`
 
 ---
 
@@ -42,7 +98,9 @@ Handover SR
 
 ---
 
-### 1B — Ambiguous openers (should ask for clarification)
+### 1B — Q&A / FAQ questions (route to faq_node, not SR workflow)
+
+These all have `ASK_HELP` intent. The bot answers using the embedded FAQ prompt — no SR workflow is activated, no session is created.
 
 ```
 hello
@@ -54,26 +112,32 @@ hi there
 help
 ```
 ```
-I need to do something about a lease
-```
-```
 What can you do?
 ```
 ```
-I want to do something with my unit
+How do I submit a service request?
 ```
 ```
-service request
+What is FM review?
 ```
 ```
-I have an issue
+Who is the DD Engineer?
+```
+```
+What documents do I need for FM review?
+```
+```
+How long does FM approval take?
+```
+```
+What stages does a handover SR go through?
 ```
 
-**Expected:** Bot asks what the user wants to do (create / update / approve / check status).
+**Expected (all):** Bot returns a FAQ-based answer. `intent = "ASK_HELP"`. No `active_agent` is set. No draft is created.
 
 ---
 
-### 1C — Off-topic or unsupported intents
+### 1C — Off-topic questions (also route to faq_node with graceful response)
 
 ```
 What is the weather today?
@@ -94,7 +158,7 @@ Book a meeting room for me
 Who is the CEO of Cenomi?
 ```
 
-**Expected:** Bot politely declines or asks if the user wants to create a service request instead.
+**Expected:** FAQ node responds with "I don't have information about that yet" — no SR workflow is activated. The bot does NOT ask whether the user wants to create a service request.
 
 ---
 
@@ -1094,22 +1158,31 @@ After any successful submission, verify the following in the [observability dash
 
 ## 17. Quick Reference — API Test Sequences
 
-All sequences use `http://localhost:8000/api/chat/service-request`. Copy a block, run Turn 1, capture `session_id`, then run subsequent turns.
+All sequences use `http://localhost:8000/api/chat/service-request`. Every request needs `Authorization: Bearer $TOKEN`.
 
-### Full happy path (curl)
+**Get a token first:**
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"aisha@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+```
+
+### Full happy path (curl — Mall Manager)
 
 ```bash
 # Turn 1
 SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
   -H "Content-Type: application/json" \
-  -d '{"user_id":"tester","message":"I want to create a handover service request"}' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"user_id":"aisha","message":"I want to create a handover service request"}' \
   | jq -r '.session_id')
 echo "Session: $SESSION"
 
 # Turn 2 — lease
 curl -s -X POST http://localhost:8000/api/chat/service-request \
   -H "Content-Type: application/json" \
-  -d "{\"user_id\":\"tester\",\"session_id\":\"$SESSION\",\"message\":\"t0105712\"}" | jq '{message}'
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"user_id\":\"aisha\",\"session_id\":\"$SESSION\",\"message\":\"t0105712\"}" | jq '{message}'
 
 # Turn 3 — description
 curl -s -X POST http://localhost:8000/api/chat/service-request \
@@ -1482,6 +1555,280 @@ create a new handover for Under Armour
 **Expected:**
 - "start over" → `active_agent` cleared, `intent` cleared, bot confirms reset
 - "create a new handover..." → routes to `CREATE_HANDOVER_SERVICE_REQUEST` fresh
+
+---
+
+---
+
+## 18. FAQ Node Tests
+
+### 18A — Platform questions (all should get FAQ answers, not route to SR workflow)
+
+```
+How do I create a handover service request?
+```
+```
+What is the FM review stage?
+```
+```
+What documents does the FM Manager need to upload?
+```
+```
+What is the difference between FM Manager and Operations?
+```
+```
+What dates does the DD Engineer need to provide?
+```
+```
+What happens after FM Manager approves the SR?
+```
+```
+How long does the RDD review take?
+```
+```
+Can I edit my SR after submitting?
+```
+```
+What is a lease code?
+```
+
+**Expected for all:** FAQ answer returned. `intent = "ASK_HELP"`. No `active_agent` set. Same behaviour for all roles.
+
+---
+
+### 18B — FAQ in Arabic
+
+```
+كيف أنشئ طلب تسليم؟
+```
+```
+ما هي وثائق المراجعة FM المطلوبة؟
+```
+
+**Expected:** FAQ answer in Arabic.
+
+---
+
+### 18C — FAQ then SR intent (in same session — Q&A does not pin active_agent)
+
+Turn 1:
+```
+How do I create a handover service request?
+```
+Turn 2:
+```
+I want to create one for Under Armour
+```
+
+**Expected:** Turn 1 answers the question. Turn 2 correctly routes to `CREATE_HANDOVER_SERVICE_REQUEST` — no stale `active_agent` from Turn 1.
+
+---
+
+### 18D — FAQ curl
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"khalid@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"user_id":"khalid","message":"What documents do I need for FM review?"}' \
+  | jq '{message, intent: .state.intent, active_agent: .active_agent}'
+```
+
+**Expected:** `intent = "ASK_HELP"`, `active_agent = null`, answer contains document names.
+
+---
+
+## 19. RBAC Tests
+
+### 19A — FM Manager attempts to create an SR (should be denied)
+
+```bash
+FM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"khalid@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FM_TOKEN" \
+  -d '{"user_id":"khalid","message":"I want to create a handover service request for Under Armour"}' \
+  | jq '{message, active_agent}'
+```
+
+**Expected:** Role mismatch message. `active_agent = null`. No SR workflow activated.
+
+---
+
+### 19B — DD Engineer attempts to create an SR (should be denied)
+
+```bash
+DD_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"sara@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DD_TOKEN" \
+  -d '{"user_id":"sara","message":"Create a handover SR for Nike"}' \
+  | jq '{message, active_agent}'
+```
+
+**Expected:** Role mismatch explanation. `active_agent = null`.
+
+---
+
+### 19C — Mall Manager attempts FM approval (should be denied)
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"aisha@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"user_id":"aisha","message":"I want to approve the FM review for SR-2026-00741"}' \
+  | jq '{message, active_agent}'
+```
+
+**Expected:** Role mismatch explanation. No FM workflow activated.
+
+---
+
+### 19D — All roles can ask FAQ questions (read intents are universal)
+
+```bash
+for USER in "aisha@cenomi.com" "khalid@cenomi.com" "omar@cenomi.com" "sara@cenomi.com"; do
+  TOK=$(curl -s -X POST http://localhost:8000/api/auth/login \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"$USER\",\"password\":\"test1234\"}" | jq -r '.access_token')
+  echo "=== $USER ==="
+  curl -s -X POST http://localhost:8000/api/chat/service-request \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOK" \
+    -d '{"user_id":"test","message":"What is FM review?"}' \
+    | jq '{message: (.message | .[0:80]), intent: .state.intent}' 
+done
+```
+
+**Expected:** All roles receive a FAQ answer. `intent = "ASK_HELP"` for all.
+
+---
+
+### 19E — All roles can preview and check status of any SR
+
+```bash
+# Any role with sr_id — should route to preview, not to stage-specific workflow
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"aisha@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"user_id":"aisha","message":"Show me the status of this SR","sr_id":"SR-2026-00741"}' \
+  | jq '{message, intent: .state.intent}'
+```
+
+**Expected:** SR preview card or status message. No stage-specific workflow activated.
+
+---
+
+## 20. FM Review Tests (FM Manager / Operations)
+
+### 20A — FM Manager opens an existing SR (sr_id passed by frontend)
+
+```bash
+FM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"khalid@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+# FM Manager opens SR — first turn with sr_id
+SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FM_TOKEN" \
+  -d '{"user_id":"khalid","message":"","sr_id":"SR-2026-00741"}' \
+  | jq -r '.session_id')
+
+echo "FM Session: $SESSION"
+```
+
+**Expected:** `sr_status_sync` runs, detects `FM_MANAGER IN_PROGRESS`, routes to `fm_review_entry`. Bot asks for `unit_readiness_date` and `expected_handover_date`.
+
+---
+
+### 20B — FM Manager provides dates
+
+```bash
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$SESSION\",\"message\":\"Unit ready July 10, handover expected July 20 2026\"}" \
+  | jq '{message, missing_fields: .state.missing_fields}'
+```
+
+---
+
+### 20C — FM Manager approves
+
+```bash
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$SESSION\",\"message\":\"Approve\",\"action\":\"approve_fm_review\"}" \
+  | jq '{message, workflow_stage: .state.workflow_stage}'
+```
+
+**Expected:** FM PATCH sent with `status=APPROVED`. `workflow_stage` advances.
+
+---
+
+## 21. RDD Review Tests (DD Engineer)
+
+### 21A — DD Engineer opens SR after FM approval
+
+```bash
+DD_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"sara@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DD_TOKEN" \
+  -d '{"user_id":"sara","message":"","sr_id":"SR-2026-00741"}' \
+  | jq -r '.session_id')
+```
+
+**Expected:** `sr_status_sync` detects `DD_ENGINEER IN_PROGRESS`, routes to `rdd_review_entry`. Bot asks for RDD dates and guideline link.
+
+---
+
+### 21B — DD Engineer provides RDD fields
+
+```bash
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$SESSION\",\"message\":\"Actual handover July 15, fitout start July 16, fitout end July 20, trading date July 25 2026. Guideline: http://cenomi.com/guidelines/handover\"}" \
+  | jq '{message, missing_fields: .state.missing_fields}'
+```
+
+---
+
+### 21C — DD Engineer submits RDD report
+
+```bash
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$SESSION\",\"message\":\"Submit\",\"action\":\"submit_rdd_report\"}" \
+  | jq '{message, workflow_stage: .state.workflow_stage}'
+```
+
+**Expected:** RDD report POST sent. `workflow_stage = "SR_COMPLETED"`.
 
 ---
 

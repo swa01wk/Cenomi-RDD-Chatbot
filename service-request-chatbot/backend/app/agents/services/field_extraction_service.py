@@ -55,6 +55,7 @@ class FieldExtractionService:
         workflow_stage: str | None = None,
         recent_history: list[dict[str, str]] | None = None,
         missing_fields: list[str] | None = None,
+        system_prompt: str | None = None,
     ) -> tuple[HandoverExtractedFields, ExtractionTraceMeta]:
         """Extract candidate field values from *user_message*.
 
@@ -86,6 +87,10 @@ class FieldExtractionService:
         gateway = self._gateway or get_default_gateway()
         user_content = self._build_user_content(user_message, workflow_stage, recent_history, missing_fields)
 
+        # Use the caller-supplied prompt when provided (multi-workflow support);
+        # fall back to the handover default for backward compatibility.
+        effective_prompt = system_prompt or HANDOVER_EXTRACTION_SYSTEM_PROMPT
+
         meta = ExtractionTraceMeta()
         result: HandoverExtractedFields | None = None
         wall_start = time.monotonic()
@@ -94,7 +99,7 @@ class FieldExtractionService:
             meta.retry_count = attempt
             try:
                 raw, input_tokens, output_tokens, latency_ms = await gateway.complete_json(
-                    system_prompt=HANDOVER_EXTRACTION_SYSTEM_PROMPT,
+                    system_prompt=effective_prompt,
                     user_message=user_content,
                 )
                 meta.input_tokens = input_tokens

@@ -1,11 +1,20 @@
-# End-to-End Test Guide — Handover Service Request
+# End-to-End Test Guide — Helper Agent (Handover Service Request)
 
 > **Environment:** Both `LEASE_TENANT_API_BASE_URL` and `SERVICE_REQUEST_API_BASE_URL` are empty in `.env`,
 > so the **mock adapters** are active. No external APIs are required.
 >
-> **Frontend:** http://localhost:3000/service-request-chat  
+> **Frontend login:** http://localhost:3000/login  
+> **Frontend chat:** http://localhost:3000/service-request-chat  
 > **Backend API docs:** http://localhost:8000/docs  
 > **Observability dashboard:** http://localhost:3000/admin/agent-observability
+>
+> **Before running any scenario**, start the server, run the migration and seed:
+> ```bash
+> cd backend
+> alembic upgrade head        # creates the users table
+> python scripts/seed_users.py  # seeds 5 test users
+> uvicorn app.main:app --reload
+> ```
 
 ---
 
@@ -13,14 +22,16 @@
 
 | Area | Old behaviour | Current behaviour |
 |------|--------------|-------------------|
+| **Authentication** | No login — `user_id` sent in request body only | **Login required** — `POST /api/auth/login` issues a JWT. Every chat request must include `Authorization: Bearer <token>`. `user_id` from the body is a fallback only. |
+| **Q&A / FAQ** | Off-topic questions fell through to SR clarification prompt | **FAQ node** — `ASK_HELP` intent routes to a dedicated FAQ node that answers platform questions via an embedded FAQ prompt. No SR workflow activated. |
+| **Role-based routing** | No RBAC — any user could trigger any intent | **RBAC enforced** — each role has a permitted intent set. FM Manager cannot create SRs; Mall Manager cannot do FM approval. Mismatches get a role-appropriate explanation. |
+| **FM Review** | FM review was Postman-only (Phase 2 API calls) | **FM Review is now chatbot-driven** — FM Manager opens the SR with `sr_id`, the Helper Agent detects `FM_REVIEW` stage via `sr_status_sync`, and drives the review workflow. |
+| **RDD Review** | RDD review was Postman-only (Phase 3 API calls) | **RDD Review is now chatbot-driven** — DD Engineer opens the SR with `sr_id`, the Helper Agent detects `RDD_REVIEW` stage, and drives the report submission. |
+| **`sr_id` in request body** | Not supported | New `sr_id` field — FM Manager and DD Engineer pass it when opening an existing SR from a notification or SR list. |
 | **Title field** | Bot asked user for a title (Turn 3 in old happy path) | Title is **auto-generated** — `handover-{lease_code}-{description_slug}`. The bot never asks for it; the LLM is explicitly forbidden from extracting it. |
 | **Multi-field extraction** | Bot collected exactly one field per turn | Bot now extracts **all fields mentioned in a single message** — e.g. start date + end date + inspector in one reply. |
-| **Confirmation card placement** | Card appeared only in the right sidebar | Card now renders **inline in the chat stream** beneath the bot's message; sidebar still mirrors it. Previous cards become read-only once a new turn is sent. |
 | **Confirm / Cancel buttons** | Triggered plain text messages only | Buttons send `action: "confirm"` / `action: "cancel"` — these bypass LLM text parsing and are acted on unconditionally. |
-| **Inline field edits** | Corrections required a new chat message | The confirmation card lets users edit any editable field in-place. Edits are sent as `corrected_fields` — applied before validation, never going through the LLM. |
-| **"No comments" handling** | Empty string was treated as missing → bot re-asked | `description`, `comments`, `notes` are optional — an empty-string answer (`""`) is accepted and never blocks submission. |
-| **Cancel vs Restart** | "cancel" cleared all state | Two distinct behaviours: **"cancel"** (or Cancel button) during a pending card → sets status to REJECTED and asks what to change. **"start over" / "restart" / "new request"** → clears `active_agent` and truly restarts from scratch. |
-| **`inspection_done_by` values** | Stored as display text | LLM normalises any natural-language phrasing to `FM_MANAGER` or `OPERATIONS` (uppercase enum). That is what the confirmation card and API payload contain. |
+| **Inline field edits** | Corrections required a new chat message | The confirmation card lets users edit any editable field in-place. Edits are sent as `corrected_fields`. |
 | **Date validation** | Not enforced server-side | `startDate` **must be strictly before** `endDate`. Equal dates are rejected with a blocking validation error. |
 
 ---
@@ -373,10 +384,16 @@ The mock returns `HTTP 201` with a UUID SR reference and a correlation ID.
 Drive the full flow from the terminal to verify payload construction directly.
 
 ```bash
+# ── Get token (Mall Manager) ──────────────────────────────────────────────
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"aisha@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
 # ── Turn 1: state intent ──────────────────────────────────────────────────
 curl -s -X POST http://localhost:8000/api/chat/service-request \
   -H "Content-Type: application/json" \
-  -d '{"user_id":"tester","message":"I want to create a handover service request"}' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"user_id":"aisha","message":"I want to create a handover service request"}' \
   | jq '.'
 
 # Copy the session_id from the response, then reuse it for every subsequent turn:
@@ -385,7 +402,8 @@ SESSION="<paste-session-id-here>"
 # ── Turn 2: provide lease code ────────────────────────────────────────────
 curl -s -X POST http://localhost:8000/api/chat/service-request \
   -H "Content-Type: application/json" \
-  -d "{\"user_id\":\"tester\",\"session_id\":\"$SESSION\",\"message\":\"t0105712\"}" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"user_id\":\"aisha\",\"session_id\":\"$SESSION\",\"message\":\"t0105712\"}" \
   | jq '{message,ui_type: .ui.type}'
 
 # ── Turn 3: description (NO title turn any more) ───────────────────────────
@@ -488,13 +506,110 @@ curl -s -X POST http://localhost:8000/api/chat/service-request \
 
 | Field | Type | Description |
 |---|---|---|
-| `user_id` | `string` (required) | Caller identifier |
+| `user_id` | `string` | Caller identifier — used as fallback when no JWT present |
 | `session_id` | `string \| null` | Omit to start a new session; include to continue |
-| `message` | `string` (required, min 1 char) | User's natural-language input |
-| `action` | `"confirm" \| "cancel" \| null` | Bypasses text parsing: `"confirm"` → immediate submission; `"cancel"` → REJECTED |
+| `message` | `string` (min 0 chars) | User's natural-language input. May be empty when `sr_id` is set. |
+| `action` | `"confirm" \| "cancel" \| string \| null` | Bypasses text parsing. SR actions: `"confirm"`, `"cancel"`. FM actions: `"approve_fm_review"`, `"reject_fm_review"`, `"save_fm_progress"`. RDD action: `"submit_rdd_report"`. |
 | `selected_lease_id` | `string \| null` | Lease code chosen from a `lease_selection` card |
 | `corrected_fields` | `object \| null` | Inline field edits from the confirmation card; merged into `collected_data` before validation |
 | `attachments` | `array` | Optional file attachment metadata |
+| `sr_id` | `string \| null` | **NEW** — Platform SR reference passed by FM Manager or DD Engineer when opening an existing SR. Triggers `sr_status_sync` on the first turn. |
+
+**Required header:** `Authorization: Bearer <token>` from `POST /api/auth/login`
+
+---
+
+---
+
+## Scenario 12 — FM Manager Reviews the SR (New Stage)
+
+**Goal:** Verify FM Manager can open an SR, provide FM dates, and approve the FM review.
+**Role:** FM Manager (`khalid@cenomi.com`)
+**Prerequisite:** `$SR_ID` from a successful Scenario 1 submission
+
+| Turn | Type this |
+|------|-----------|
+| 1 | *(FM Manager opens SR — frontend passes `sr_id` in request body, empty message)* |
+| 2 | `Unit will be ready July 10 2026, handover expected July 20 2026` |
+| 3 | *(Upload 3 FM documents via `POST /api/v1/upload` — see document types below)* |
+| 4 | `Approve`, or click the **Approve FM Review** action button |
+| 5 | *(Click **Confirm** on fm_confirmation card)* |
+
+**What to expect:**
+- **Turn 1** → `sr_status_sync` detects `FM_MANAGER IN_PROGRESS`; `workflow_stage = "FM_REVIEW"`
+- **Turn 2** → Both FM dates stored; bot asks to upload documents
+- **Turns 3** → Upload `SR_HANDOVER_CHECKLIST`, `SR_HANDOVER_SITE_SURVEY`, `SR_COP_CHECKLIST_OTHER`
+- **Turn 4** → FM confirmation card appears
+- **Turn 5** → FM PATCH sent with `status=APPROVED` ✅
+
+**FM document types for upload endpoint:**
+- `SR_HANDOVER_CHECKLIST`
+- `SR_HANDOVER_SITE_SURVEY`
+- `SR_COP_CHECKLIST_OTHER`
+
+```bash
+FM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"khalid@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+FM_SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"message\":\"\",\"sr_id\":\"$SR_ID\"}" | jq -r '.session_id')
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$FM_SESSION\",\"message\":\"Unit ready July 10, handover July 20 2026\"}" \
+  | jq '{message, workflow_stage: .state.workflow_stage}'
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$FM_SESSION\",\"message\":\"Approve\",\"action\":\"approve_fm_review\"}" \
+  | jq '{message}'
+```
+
+---
+
+## Scenario 13 — DD Engineer Submits RDD Report (New Stage)
+
+**Goal:** Verify DD Engineer can open an SR in RDD_REVIEW, provide RDD fields, and submit the report.
+**Role:** DD Engineer (`sara@cenomi.com`)
+**Prerequisite:** SR in `RDD_REVIEW` stage after FM approval
+
+| Turn | Type this |
+|------|-----------|
+| 1 | *(DD Engineer opens SR — frontend passes `sr_id`, empty message)* |
+| 2 | `Actual handover July 15, fitout start July 16, fitout end July 20, trading July 25 2026. Guideline: http://cenomi.com/guidelines/handover` |
+| 3 | *(Upload `DR_SR_HANDOVER_REPORT` via `POST /api/v1/upload`)* |
+| 4 | `Submit`, or click the **Submit RDD Report** action button |
+| 5 | *(Click **Confirm** on rdd_confirmation card)* |
+
+**What to expect:**
+- **Turn 1** → `sr_status_sync` detects `DD_ENGINEER IN_PROGRESS`; `workflow_stage = "RDD_REVIEW"`
+- **Turn 2** → All 5 RDD fields + guideline extracted; date chain validated
+- **Turn 4** → RDD confirmation card appears
+- **Turn 5** → RDD report POST sent; `workflow_stage = "SR_COMPLETED"` ✅
+
+**RDD date chain constraint:** `actual_handover_date ≤ fitout_start_date ≤ fitout_end_date ≤ trading_date`
+
+```bash
+DD_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"sara@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+DD_SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"message\":\"\",\"sr_id\":\"$SR_ID\"}" | jq -r '.session_id')
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$DD_SESSION\",\"message\":\"Actual handover July 15, fitout start July 16, fitout end July 20, trading July 25 2026. Guideline: http://cenomi.com/gl/001\"}" \
+  | jq '{message, missing_fields: .state.missing_fields}'
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$DD_SESSION\",\"message\":\"Submit report\",\"action\":\"submit_rdd_report\"}" \
+  | jq '{message, workflow_stage: .state.workflow_stage}'
+```
 
 ---
 

@@ -1,4 +1,5 @@
 import type { ChatServiceRequest, ChatServiceResponse, ResponseUI } from "@/lib/types/chat";
+import { getStoredToken, getStoredUser } from "@/lib/api/auth-client";
 
 function apiBase(): string {
   const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -8,9 +9,12 @@ function apiBase(): string {
 export async function postServiceRequestChat(
   body: ChatServiceRequest,
 ): Promise<ChatServiceResponse> {
+  const user = getStoredUser();
+  const token = getStoredToken();
+
   const payload: Record<string, unknown> = {
     session_id: body.sessionId ?? null,
-    user_id: "demo_user",
+    user_id: user?.userId ?? "demo_user",
     message: body.message,
     attachments: body.attachmentIds?.map((id) => ({ id })) ?? [],
   };
@@ -18,10 +22,14 @@ export async function postServiceRequestChat(
   if (body.action) payload.action = body.action;
   if (body.selectedLeaseId) payload.selected_lease_id = body.selectedLeaseId;
   if (body.correctedFields) payload.corrected_fields = body.correctedFields;
+  if (body.srId) payload.sr_id = body.srId;
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${apiBase()}/chat/service-request`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
   });
 

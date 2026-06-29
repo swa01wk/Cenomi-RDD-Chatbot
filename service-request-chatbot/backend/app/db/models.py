@@ -43,6 +43,42 @@ class Base(DeclarativeBase):
 # ─── Domain models ────────────────────────────────────────────────────────────
 
 
+class User(Base):
+    """Platform user — stores credentials and role for login-gated chat.
+
+    ``unique_property_ids`` is a JSONB array of mall property IDs used for
+    row-level data scoping (lease lookup, future search).
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    username: Mapped[str] = mapped_column(Text(), nullable=False, unique=True)
+    email: Mapped[str] = mapped_column(Text(), nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(Text(), nullable=False)
+    role: Mapped[str] = mapped_column(Text(), nullable=False)
+    unique_property_ids: Mapped[list[Any]] = mapped_column(
+        JSONB, default=list, server_default="[]"
+    )
+    mall_names: Mapped[list[Any]] = mapped_column(
+        JSONB, default=list, server_default="[]"
+    )
+    is_global_admin: Mapped[bool] = mapped_column(
+        Boolean(), default=False, server_default="false"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean(), default=True, server_default="true"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ChatSession(Base):
     """Represents one user conversation session."""
 

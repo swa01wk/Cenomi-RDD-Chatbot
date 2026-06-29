@@ -17,8 +17,11 @@ from app.types.service_request import ValidationIssueDTO
 HANDOVER_FIELD_QUESTIONS: dict[str, str] = {
     "lease_code": "Ask the user for the lease code for this handover request.",
     "lease_brand_mall": "Ask the user for the lease, brand name, or mall name.",
-    # "title" is intentionally omitted: it is auto-generated as
-    # "handover-{lease_code}-{description_slug}" and never asked from the user.
+    "title": (
+        "Ask the user if they have a specific title for this handover request. "
+        "Let them know the system will auto-generate one from the lease code and description "
+        "if they do not provide one."
+    ),
     "description": "Ask the user for a short description of this handover request.",
     "startDate": "Ask the user when the inspection should start (date).",
     "endDate": "Ask the user when the inspection should end (date).",

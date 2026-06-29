@@ -12,8 +12,12 @@ MessageRole = Literal["user", "assistant", "system"]
 @dataclass(frozen=True, slots=True)
 class AuthContext:
     subject_id: str
-    tenant_id: str | None
+    tenant_id: str | None = None
     roles: frozenset[str] = field(default_factory=frozenset)
+    # Mall-level scoping for RLS — populated from JWT claims
+    unique_property_ids: tuple[int, ...] = field(default_factory=tuple)
+    mall_names: tuple[str, ...] = field(default_factory=tuple)
+    is_global_admin: bool = False
 
 
 @dataclass(frozen=True, slots=True)

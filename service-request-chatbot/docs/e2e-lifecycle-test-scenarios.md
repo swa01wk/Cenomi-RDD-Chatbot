@@ -3,17 +3,41 @@
 > **This document is the master test reference.** It combines the lifecycle phase map, per-turn state assertions, and structured scenario scripts into one place.
 >
 > **Related docs:**
-> - [`chatbot-test-queries.md`](chatbot-test-queries.md) — exhaustive query catalogue (input variations per field)
+> - [`chatbot-test-queries.md`](chatbot-test-queries.md) — exhaustive query catalogue (input variations per field, FAQ tests, RBAC tests)
 > - [`e2e-test-guide.md`](e2e-test-guide.md) — original scenario walkthroughs and API payload reference
+>
+> **What changed from the previous version:**
+> - Login is now required — all requests need `Authorization: Bearer <token>`
+> - The Helper Agent graph replaces the SR-only graph — FAQ path added, role-aware routing
+> - FM Review and RDD Review stages are now handled by the Helper Agent (not Postman-only)
+> - Three separate user roles drive three sequential stages of one SR lifecycle
+> - `sr_id` field in request body — FM Manager and DD Engineer pass it when opening an existing SR
 >
 > **Environments:**
 >
 > | Service | URL |
 > |---|---|
+> | Frontend login | http://localhost:3000/login |
 > | Frontend chat | http://localhost:3000/service-request-chat |
 > | Backend API docs | http://localhost:8000/docs |
 > | Observability dashboard | http://localhost:3000/admin/agent-observability |
+> | Login endpoint | `POST http://localhost:8000/api/auth/login` |
 > | Primary chat endpoint | `POST http://localhost:8000/api/chat/service-request` |
+>
+> **Get tokens before running any scenario:**
+> ```bash
+> MM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+>   -H "Content-Type: application/json" \
+>   -d '{"username":"aisha@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+>
+> FM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+>   -H "Content-Type: application/json" \
+>   -d '{"username":"khalid@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+>
+> DD_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+>   -H "Content-Type: application/json" \
+>   -d '{"username":"sara@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+> ```
 
 ---
 
@@ -103,18 +127,26 @@ flowchart TD
 
 Each phase maps to observable fields in the API response (`state.*` and `ui.type`).
 
-| Phase | What triggers it | Key graph nodes | `state.workflow_stage` | `state.confirmation_status` | `state.ready_to_submit` | `ui.type` |
-|---|---|---|---|---|---|---|
-| **Ambiguous / off-topic** | First message is unclear or unrelated | `supervisor` → `response_generation` | `null` or previous value | `null` | `false` | `text` |
-| **Intent classified** | Clear handover intent detected | `supervisor` → `registry` → `handover_entry` | `CREATE_HANDOVER_SERVICE_REQUEST` | `null` | `false` | `text` |
+| Phase | What triggers it | Role | Key graph nodes | `state.workflow_stage` | `state.confirmation_status` | `state.ready_to_submit` | `ui.type` |
+|---|---|---|---|---|---|---|---|
+| **FAQ / Q&A** | Question about platform (any role) | Any | `supervisor` → `faq_node` → `response_generation` | `null` | `null` | `false` | `text` |
+| **Role mismatch** | Intent not permitted for role | Any | `supervisor` → `response_generation` | `null` | `null` | `false` | `text` |
+| **Ambiguous / off-topic** | Unclear message (falls back to FAQ) | Any | `supervisor` → `faq_node` → `response_generation` | `null` | `null` | `false` | `text` |
+| **Intent classified (CREATE_SR)** | Clear handover intent | MALL_MANAGER | `supervisor` → `registry` → `handover_entry` | `CREATE_SR` | `null` | `false` | `text` |
 | **Lease resolution — pending** | Bot asks for lease identifier | `missing_field` | `CREATE_HANDOVER_SERVICE_REQUEST` | `null` | `false` | `text` |
 | **Lease resolution — multi-match** | Brand search returns >1 result | `response_generation` | `CREATE_HANDOVER_SERVICE_REQUEST` | `null` | `false` | `lease_selection` |
 | **Lease resolved** | Lease code, brand, or mall matches exactly 1 record | `lease_lookup` → `validation` | `CREATE_HANDOVER_SERVICE_REQUEST` | `null` | `false` | `text` |
 | **Field collection** | One or more required fields missing | `field_extraction` → `missing_field` loop | `CREATE_HANDOVER_SERVICE_REQUEST` | `null` | `false` | `text` |
 | **Confirmation pending** | All required fields collected and valid | `confirmation` | `CREATE_HANDOVER_SERVICE_REQUEST` | `PENDING` | `true` | `confirmation_card` |
 | **Rejected — correction** | Cancel button / reject phrase / `action: cancel` | `confirmation` → `field_extraction` | `CREATE_HANDOVER_SERVICE_REQUEST` | `REJECTED` | `true` | `text` |
-| **Submitted successfully** | Confirm button / confirm phrase / `action: confirm` | `payload_builder` → `api_submission` → `response_generation` | `SR_CREATED` | `CONFIRMED` | `true` | `text` (UUID in message) |
-| **Injection blocked** | `scan_message` detects prompt injection | `ChatOrchestrationService` (before graph) | unchanged | unchanged | unchanged | `text` |
+| **Submitted successfully** | Confirm button / `action: confirm` | MALL_MANAGER | `payload_builder` → `api_submission` → `response_generation` | `SR_CREATED` | `CONFIRMED` | `true` | `text` (UUID in message) |
+| **FM Review — field collection** | FM Manager opens SR (`sr_id` passed); `sr_status_sync` detects FM_MANAGER IN_PROGRESS | FM_MANAGER / OPERATIONS | `sr_status_sync` → `fm_review_entry` → `field_extraction` | `FM_REVIEW` | `null` | `false` | `text` |
+| **FM Review — confirmation** | FM dates + docs all present | FM_MANAGER | `fm_confirmation` | `FM_REVIEW` | `PENDING` | `true` | `confirmation_card` |
+| **FM Review — approved** | `action: approve_fm_review` + CONFIRMED | FM_MANAGER | `fm_payload_builder` → `fm_api_submission` | `FM_REVIEW` | `CONFIRMED` | `true` | `text` |
+| **RDD Review — field collection** | DD Engineer opens SR; `sr_status_sync` detects DD_ENGINEER IN_PROGRESS | DD_ENGINEER | `sr_status_sync` → `rdd_review_entry` → `field_extraction` | `RDD_REVIEW` | `null` | `false` | `text` |
+| **RDD Review — confirmation** | RDD dates + guideline + report doc all present | DD_ENGINEER | `rdd_confirmation` | `RDD_REVIEW` | `PENDING` | `true` | `confirmation_card` |
+| **RDD Review — completed** | `action: submit_rdd_report` + CONFIRMED | DD_ENGINEER | `rdd_payload_builder` → `rdd_api_submission` | `SR_COMPLETED` | `CONFIRMED` | `true` | `text` |
+| **Injection blocked** | `scan_message` detects prompt injection | Any | `ChatOrchestrationService` (before graph) | unchanged | unchanged | unchanged | `text` |
 
 ---
 
@@ -971,6 +1003,171 @@ curl -s -X POST http://localhost:8000/api/chat/service-request \
 
 ---
 
+---
+
+### Scenario 21 — FM Manager Completes FM Review
+
+**Goal:** Verify that an FM Manager can open an existing SR, provide FM dates, upload documents, and approve the FM review stage.
+**Role:** FM_MANAGER (`khalid@cenomi.com`)
+**Prerequisite:** SR created via Scenario 1 (`sr_id` known)
+
+| Turn | Who | Send | Expected behavior | Assert `state.*` |
+|---|---|---|---|---|
+| 1 | FM Manager | Opens SR — `sr_id: "SR-XXXX"`, empty message | `sr_status_sync` detects `FM_MANAGER IN_PROGRESS`; bot asks for `unit_readiness_date` | `workflow_stage = "FM_REVIEW"` |
+| 2 | FM Manager | `Unit will be ready July 10, handover expected July 20 2026` | Both FM dates extracted; bot asks to upload FM documents | `collected_data.unit_readiness_date = "2026-07-10"` |
+| 3 | FM Manager | *(Upload 3 documents via `POST /api/v1/upload` out-of-band)* | Documents registered in `backend_refs.uploaded_documents` | `documents` list populated |
+| 4 | FM Manager | `approve`, or `action: "approve_fm_review"` | FM confirmation card shown | `confirmation_status = "PENDING"`, `ui.type = "confirmation_card"` |
+| 5 | FM Manager | Click **Confirm** | FM PATCH sent with `status=APPROVED` | `fm_status = "APPROVED"` |
+
+```bash
+FM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"khalid@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+# Turn 1 — FM Manager opens existing SR
+SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"message\":\"\",\"sr_id\":\"$SR_ID\"}" \
+  | jq -r '.session_id')
+
+# Turn 2 — FM dates
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$SESSION\",\"message\":\"Unit ready July 10 2026, handover expected July 20 2026\"}" \
+  | jq '{message, missing_fields: .state.missing_fields}'
+
+# Turn 3 — Approve
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$SESSION\",\"message\":\"Approve FM review\",\"action\":\"approve_fm_review\"}" \
+  | jq '{message, workflow_stage: .state.workflow_stage}'
+```
+
+---
+
+### Scenario 22 — DD Engineer Completes RDD Review
+
+**Goal:** Verify that a DD Engineer can open an SR in RDD_REVIEW stage, provide RDD dates, upload the report, and submit.
+**Role:** DD_ENGINEER (`sara@cenomi.com`)
+**Prerequisite:** SR in `RDD_REVIEW` stage after FM approval
+
+| Turn | Who | Send | Expected behavior | Assert `state.*` |
+|---|---|---|---|---|
+| 1 | DD Engineer | Opens SR — `sr_id: "SR-XXXX"`, empty message | `sr_status_sync` detects `DD_ENGINEER IN_PROGRESS`; bot asks for RDD fields | `workflow_stage = "RDD_REVIEW"` |
+| 2 | DD Engineer | `Actual handover July 15, fitout start July 16, fitout end July 20, trading July 25 2026. Guideline: http://cenomi.com/guidelines` | All 5 RDD fields extracted; date chain validated | `missing_fields = ["DR_SR_HANDOVER_REPORT"]` or empty |
+| 3 | DD Engineer | *(Upload `DR_SR_HANDOVER_REPORT` via `POST /api/v1/upload` out-of-band)* | Report registered | `backend_refs.rdd_document_id` set |
+| 4 | DD Engineer | `Submit`, or `action: "submit_rdd_report"` | RDD confirmation card shown | `confirmation_status = "PENDING"`, `ui.type = "confirmation_card"` |
+| 5 | DD Engineer | Click **Confirm** | RDD report POST sent; SR completed | `workflow_stage = "SR_COMPLETED"` |
+
+```bash
+DD_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"sara@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+# Turn 1 — DD Engineer opens SR
+SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"message\":\"\",\"sr_id\":\"$SR_ID\"}" \
+  | jq -r '.session_id')
+
+# Turn 2 — RDD dates + guideline
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$SESSION\",\"message\":\"Actual handover July 15, fitout start July 16, fitout end July 20, trading July 25 2026. Guideline: http://cenomi.com/guidelines/handover-001\"}" \
+  | jq '{message, missing_fields: .state.missing_fields}'
+
+# Turn 3 — Submit RDD report
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$SESSION\",\"message\":\"Submit the report\",\"action\":\"submit_rdd_report\"}" \
+  | jq '{message, workflow_stage: .state.workflow_stage}'
+```
+
+---
+
+### Scenario 23 — Full Sequential Lifecycle (Three Users, Three Sessions)
+
+**Goal:** Run the entire SR lifecycle from Mall Manager creation through FM Review through RDD Review — three separate users, three independent sessions, one SR.
+
+```bash
+# ── Get tokens ────────────────────────────────────────────────────────────────
+MM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"aisha@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+FM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"khalid@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+DD_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"sara@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+BASE="http://localhost:8000/api/chat/service-request"
+
+# ── STAGE 1: Mall Manager creates SR ─────────────────────────────────────────
+MM_SESSION=$(curl -s -X POST "$BASE" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $MM_TOKEN" \
+  -d '{"user_id":"aisha","message":"I want to create a handover service request"}' \
+  | jq -r '.session_id')
+
+for MSG in "t0105712" "Annual fit-out handover for FF050" "2026-07-01" "2026-07-03" "FM Manager" "No comments"; do
+  curl -s -X POST "$BASE" \
+    -H "Content-Type: application/json" -H "Authorization: Bearer $MM_TOKEN" \
+    -d "{\"user_id\":\"aisha\",\"session_id\":\"$MM_SESSION\",\"message\":\"$MSG\"}" \
+    | jq -r '.message' | head -1
+done
+
+SR_ID=$(curl -s -X POST "$BASE" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $MM_TOKEN" \
+  -d "{\"user_id\":\"aisha\",\"session_id\":\"$MM_SESSION\",\"message\":\"Confirm\",\"action\":\"confirm\"}" \
+  | jq -r '.message' | grep -oE 'SR-[0-9A-Za-z-]+' | head -1)
+
+echo "Created SR: $SR_ID"
+
+# ── STAGE 2: FM Manager reviews (new session, passes sr_id) ──────────────────
+FM_SESSION=$(curl -s -X POST "$BASE" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"message\":\"\",\"sr_id\":\"$SR_ID\"}" \
+  | jq -r '.session_id')
+
+curl -s -X POST "$BASE" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$FM_SESSION\",\"message\":\"Unit ready July 10, handover July 20 2026\"}" \
+  | jq '{message}'
+
+curl -s -X POST "$BASE" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$FM_SESSION\",\"message\":\"Approve\",\"action\":\"approve_fm_review\"}" \
+  | jq '{message, workflow_stage: .state.workflow_stage}'
+
+# ── STAGE 3: DD Engineer submits RDD report (new session) ────────────────────
+DD_SESSION=$(curl -s -X POST "$BASE" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"message\":\"\",\"sr_id\":\"$SR_ID\"}" \
+  | jq -r '.session_id')
+
+curl -s -X POST "$BASE" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$DD_SESSION\",\"message\":\"Actual handover July 15, fitout July 16-20, trading July 25 2026. Guideline: http://cenomi.com/gl/001\"}" \
+  | jq '{message}'
+
+curl -s -X POST "$BASE" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$DD_SESSION\",\"message\":\"Submit\",\"action\":\"submit_rdd_report\"}" \
+  | jq '{message, workflow_stage: .state.workflow_stage}'
+```
+
+**Expected final output:** `workflow_stage: "SR_COMPLETED"`
+
+---
+
 ## Part 4 — State Assertion Reference
 
 All fields come from `response.state` in `POST /api/chat/service-request` responses.
@@ -1091,11 +1288,15 @@ The following areas have dedicated coverage in [`chatbot-test-queries.md`](chatb
 
 ---
 
-## Part 7 — Post-Chatbot SR Approval Workflow (Postman Collection)
+## Part 7 — SR Approval Workflow
 
-> **Collection file:** [`gaps_and_pc/Handover SR — FIT_OUT_AND_HANDOVER - HANDOVER.postman_collection.json`](../../gaps_and_pc/Handover%20SR%20—%20FIT_OUT_AND_HANDOVER%20-%20HANDOVER.postman_collection.json)
+> **Updated:** FM Review (Stage 2) and RDD Review (Stage 3) are now handled directly by the Helper Agent — use Scenarios 21, 22, and 23 above for the full chatbot-driven lifecycle.
 >
-> This section covers **Phase 2** of the full E2E lifecycle — what happens after the chatbot creates the SR. The chatbot produces a `sr_id`; this Postman collection uses that ID to drive the SR through its approval chain.
+> The Postman collection below is kept as a **direct API reference** for verifying platform behaviour independently of the chatbot, or for testing with real platform credentials. It is no longer the primary E2E path.
+>
+> **Collection file (legacy reference):** [`gaps_and_pc/Handover SR — FIT_OUT_AND_HANDOVER - HANDOVER.postman_collection.json`](../../gaps_and_pc/Handover%20SR%20—%20FIT_OUT_AND_HANDOVER%20-%20HANDOVER.postman_collection.json)
+>
+> This section covers the direct Cenomi Platform API calls — useful for integration testing of the platform API independently of the chatbot workflow.
 
 ### The SR Status State Machine
 

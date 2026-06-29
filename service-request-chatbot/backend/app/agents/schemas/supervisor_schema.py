@@ -20,6 +20,7 @@ class SupervisorDecision(BaseModel):
     """
 
     intent: Literal[
+        "ASK_HELP",
         "CREATE_HANDOVER_SERVICE_REQUEST",
         "UPDATE_HANDOVER_SERVICE_REQUEST",
         "APPROVE_HANDOVER_SERVICE_REQUEST",

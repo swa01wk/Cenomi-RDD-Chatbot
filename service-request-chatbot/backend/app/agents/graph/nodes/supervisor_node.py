@@ -32,10 +32,12 @@ from app.agents.prompts.supervisor_prompt import (
     CONFIDENCE_THRESHOLD,
     SUPERVISOR_SYSTEM_PROMPT,
 )
-from app.agents.registries.service_request_registry import lookup_agent
+from app.agents.registry import lookup_agent
+from app.agents.schemas.helper_schema import intents_for_roles
 from app.agents.schemas.supervisor_schema import SupervisorDecision
 from app.agents.graph.state import ServiceRequestState
 from app.observability.decorators import trace_node
+from app.types.chat import AuthContext
 
 log = structlog.get_logger(__name__)
 
@@ -327,7 +329,33 @@ async def supervisor_node(state: ServiceRequestState) -> dict[str, Any]:  # noqa
             "status": "IN_PROGRESS",
         }
 
-    # ── 7b. Registry validation ────────────────────────────────────────────
+    # ── 7b. RBAC check ────────────────────────────────────────────────────
+    # Enforce role-based permissions before activating any agent.  The denial
+    # message is set in returned state here (not in the routing function) so
+    # that LangGraph propagates it correctly to response_generation_node.
+    auth: AuthContext | None = state.get("auth_context")  # type: ignore[assignment]
+    if auth is not None:
+        permitted = intents_for_roles(auth.roles, auth.is_global_admin)
+        if decision.intent not in permitted:
+            log.info(
+                "supervisor.rbac_denied",
+                intent=decision.intent,
+                roles=list(auth.roles),
+            )
+            role_display = ", ".join(sorted(auth.roles)) or "your role"
+            intent_display = decision.intent.replace("_", " ").lower()
+            return {
+                "intent": decision.intent,
+                "status": "WAITING_FOR_USER",
+                "response_message": (
+                    f"Your role ({role_display}) does not permit this action "
+                    f"({intent_display}). "
+                    "I can answer platform questions or help with actions your role allows. "
+                    "For example, I can help you create or check the status of a handover service request."
+                ),
+            }
+
+    # ── 7c. Registry validation ────────────────────────────────────────────
     # Cross-check the LLM's routing against the authoritative registry so a
     # hallucinated agent name never propagates downstream.
     agent_config = None

@@ -111,7 +111,7 @@ class TestCreateSRStage:
 
 
 class TestFMReviewStage:
-    _EXPECTED_FIELDS = ("unit_readiness_date", "expected_handover_date")
+    _EXPECTED_FIELDS = ("unit_readiness_date",)  # expected_handover_date is auto-computed
     _EXPECTED_DOCS = (
         "SR_HANDOVER_CHECKLIST",
         "SR_HANDOVER_SITE_SURVEY",
@@ -272,9 +272,10 @@ class TestHelperUtilities:
         assert set(missing) == set(FM_REVIEW_STAGE.required_fields)
 
     def test_get_missing_fields_partial(self) -> None:
+        # expected_handover_date is auto-computed from unit_readiness_date; not user-required
         collected = {"unit_readiness_date": "2025-01-01"}
         missing = get_missing_fields("FM_REVIEW", collected)
-        assert missing == ["expected_handover_date"]
+        assert missing == []  # unit_readiness_date is present; expected_handover_date is auto-computed
 
     def test_get_missing_fields_integer_zero_is_not_missing(self) -> None:
         """0 is a valid value — must not appear in missing fields."""
@@ -336,29 +337,28 @@ class TestServiceRequestGraphState:
     """Verify the graph state TypedDict declares all expected keys."""
 
     _EXPECTED_KEYS = {
-        "session_id",
-        "user_id",
-        "user_message",
-        "attachments",
-        "trace_id",
-        "active_agent",
-        "intent",
-        "service_category",
-        "sub_category",
-        "workflow_stage",
-        "collected_data",
-        "extracted_fields",
-        "missing_fields",
-        "lease_matches",
-        "selected_lease",
+        # Core identity
+        "session_id", "user_id", "user_message", "attachments", "trace_id",
+        # Routing
+        "active_agent", "intent", "service_category", "sub_category", "workflow_stage", "status",
+        # Conversation context
+        "conversation_history",
+        # Data collection
+        "collected_data", "extracted_fields", "missing_fields",
+        # Lease
+        "lease_matches", "selected_lease",
+        # Documents
         "documents",
-        "confirmation_required",
-        "confirmation_status",
-        "backend_refs",
-        "validation_errors",
-        "response_message",
-        "response_ui",
-        "status",
+        # Confirmation
+        "confirmation_required", "confirmation_status",
+        # Submission
+        "backend_refs", "validation_errors",
+        # Output
+        "response_message", "response_ui",
+        # UI-layer overrides (not persisted)
+        "action_override", "corrected_fields",
+        # Runtime-only services (not serialised)
+        "trace_manager", "conversation_state_service",
     }
 
     def test_all_keys_declared(self) -> None:

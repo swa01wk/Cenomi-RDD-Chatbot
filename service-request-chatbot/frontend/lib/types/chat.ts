@@ -118,6 +118,8 @@ export type ChatServiceRequest = {
   selectedLeaseId?: string;
   correctedFields?: Record<string, unknown>;
   action?: "confirm" | "cancel";
+  /** Platform SR ID — passed when FM/DD opens an existing SR */
+  srId?: string;
 };
 
 export type ChatServiceResponse = {

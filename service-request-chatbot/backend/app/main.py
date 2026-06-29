@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import health, upload
+from app.api.routes.auth import router as auth_router
 from app.api.routes.chat import router as chat_router
 from app.api.routes.chat import service_request_router
 from app.core.config import settings
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(health.router, prefix=settings.api_v1_prefix, tags=["health"])
+    application.include_router(auth_router, prefix="/api", tags=["auth"])
     # Primary service-request chat endpoint — mounted at /api (no version prefix per spec)
     application.include_router(service_request_router, prefix="/api", tags=["chat"])
     # Legacy v1 chat stub — kept for backward compatibility

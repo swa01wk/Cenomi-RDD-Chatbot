@@ -104,7 +104,9 @@ class TestValidateRequiredFields:
         assert all(r["status"] == "FAILED" for r in results)
 
     def test_partial_missing(self) -> None:
-        data = {"title": "SR", "description": "", "startDate": None}
+        # description=None means "not provided at all" (missing)
+        # description="" means "user said no description" (valid for optional fields)
+        data = {"title": "SR", "description": None, "startDate": None}
         results = validate_required_fields(data, ["title", "description", "startDate"])
         failed_fields = {r["field"] for r in _failed(results)}
         assert failed_fields == {"description", "startDate"}

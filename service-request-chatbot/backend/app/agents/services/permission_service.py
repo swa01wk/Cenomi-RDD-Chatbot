@@ -34,6 +34,7 @@ ACTION_PERMISSION_MAP: dict[str, str] = {
     # ── RDD_REVIEW stage (DD Engineer) ────────────────────────────────────────
     "UPLOAD_RDD_HANDOVER_REPORT": "CAN_RDD_REVIEW_HANDOVER_SR",
     "SUBMIT_RDD_HANDOVER_REPORT": "CAN_RDD_REVIEW_HANDOVER_SR",
+    "APPROVE_RDD_FINAL": "CAN_RDD_REVIEW_HANDOVER_SR",
 
     # ── Read / view ───────────────────────────────────────────────────────────
     "VIEW_HANDOVER_SR": "VIEW_FIT_OUT_HANDOVER",
@@ -41,6 +42,31 @@ ACTION_PERMISSION_MAP: dict[str, str] = {
     # ── Legacy entries (kept for backward compatibility) ──────────────────────
     "FM_APPROVAL": "CAN_APPROVE_HANDOVER_SR",
     "RDD_FINAL_APPROVAL": "CAN_APPROVE_HANDOVER_SR",
+}
+
+# ---------------------------------------------------------------------------
+# Role permission map — role → frozenset of permission strings
+# ---------------------------------------------------------------------------
+
+ROLE_PERMISSION_MAP: dict[str, frozenset[str]] = {
+    "MALL_MANAGER": frozenset({
+        "CAN_RAISE_HANDOVER_SR",
+        "VIEW_FIT_OUT_HANDOVER",
+    }),
+    "FM_MANAGER": frozenset({
+        "CAN_FM_REVIEW_HANDOVER_SR",
+        "CAN_APPROVE_FM_HANDOVER_SR",
+        "VIEW_FIT_OUT_HANDOVER",
+    }),
+    "OPERATIONS": frozenset({
+        "CAN_FM_REVIEW_HANDOVER_SR",
+        "CAN_APPROVE_FM_HANDOVER_SR",
+        "VIEW_FIT_OUT_HANDOVER",
+    }),
+    "DD_ENGINEER": frozenset({
+        "CAN_RDD_REVIEW_HANDOVER_SR",
+        "VIEW_FIT_OUT_HANDOVER",
+    }),
 }
 
 

@@ -151,15 +151,13 @@ class DocumentUploadService:
         )
 
     # ------------------------------------------------------------------
-    # Backward-compatible stub method (kept for any legacy callers)
+    # Removed stub
     # ------------------------------------------------------------------
-
-    async def register_upload(self, filename: str, content_type: str) -> str:
-        """Backward-compatible stub — always returns a placeholder.
-
-        New code should call ``upload_document`` directly.
-        """
-        return "placeholder-document-id"
+    # register_upload() previously returned "placeholder-document-id" as a
+    # POC stub.  It has been removed — callers must use upload_document()
+    # which delegates to the real platform PUT /files endpoint.
+    # If you encounter a NameError here, update the call site to use
+    # await upload_service.upload_document(...) instead.
 
 
 # ---------------------------------------------------------------------------

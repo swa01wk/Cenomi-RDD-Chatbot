@@ -1,0 +1,992 @@
+Checking server... ✓ OK
+Running 33 scenario(s), 241 turns against http://localhost:8000...
+
+▶ Scenario 1: Happy Path (Lease Code Known)
+  Full flow: intent → lease resolution → 6 field turns → confirmation card → submission
+      ✓ Turn 1: Bot should ask for lease code, brand, or mall name  3289ms
+          → Absolutely — I can help with that. Please share the lease code, or the brand name and/or mall name so I can find the right lease.  ui='text_question'
+      ✓ Turn 2: Lease auto-resolved (Under Armour, Jawharat Jeddah); bot asks for title  2199ms
+          → Got it — I’ve found lease code t0105712. Please give me a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Title accepted; bot asks for description  2277ms
+          → Thanks — I’ve noted the description for lease t0105712. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Description accepted; bot asks for start date  2300ms
+          → Thanks — I’ve noted the updated description for lease t0105712. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Start date accepted; bot asks for end date  2252ms
+          → Thanks — I’ve noted the inspection start date as 2026-06-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: End date accepted; bot asks for inspection done by  2198ms
+          → Thanks — I’ve noted the inspection end date as 2026-06-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Inspection done by accepted; bot asks for comments  2180ms
+          → Got it — FM Manager noted. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: All fields collected; confirmation card must be shown  2614ms
+          → Noted — I’ve added your high-priority comment and will treat this request as urgent. Please wait a moment while I process the handover request.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 9: SR submitted; response contains UUID reference and SR_CREATED stage  2620ms  ref=cbb03bf4-734e-449b-907f-26c2ba804f3a
+          → Confirmed — your Handover Service Request has been submitted successfully. Your reference number is cbb03bf4-734e-449b-907f-26c2ba804f3a, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (9/9 turns)
+
+▶ Scenario 2: Brand + Mall Search (No Lease Code)
+  Test free-text lease search and multi-match selection card for Nike
+      ✓ Turn 1: Lease lookup finds 2 Nike leases; lease_selection card must appear  5249ms
+          → I found multiple Nike leases, so please choose the correct one from the list shown.  ui='lease_selection'
+      ✓ Turn 2: User selects Nike Riyadh Park via text; lease auto-filled, bot asks for title  2409ms
+          → Got it — I’ve noted Nike Riyadh Park. Could you give me a short description for this handover request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Title accepted; bot asks for description  2593ms
+          → Thanks — I’ve noted the description for Nike Riyadh Park. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Description accepted; bot asks for start date  2590ms
+          → Thanks — I’ve noted the description for Nike at Riyadh Park. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Start date accepted; bot asks for end date  2303ms
+          → Thanks — I’ve noted the inspection start date as 2026-07-10. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: End date accepted; bot asks for inspection done by  2142ms
+          → Thanks — I’ve noted the inspection end date as 2026-07-12. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Inspection done by accepted; bot asks for comments  2342ms
+          → Got it — Operations will perform the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: All fields collected; confirmation card must be shown  2257ms
+          → Thanks — I’ve added that comment. Please review the details on the card and confirm if you’d like me to submit the Handover Service Request.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 9: SR submitted successfully  2668ms  ref=91871bcd-7cd2-47c7-bd89-6f7200057c9b
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is 91871bcd-7cd2-47c7-bd89-6f7200057c9b, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (9/9 turns)
+
+▶ Scenario 3: Full Details in One Message
+  Verify the LLM extracts lease_code, title, startDate, endDate, and inspection_done_by from a single long message, then only asks for what's missing
+      ✓ Turn 1: LLM extracts title, dates, and inspector from one message; lease resolved; bot asks only for what's still missing (description or comments depending on extraction)  4305ms
+          → Thanks — I’ve got the lease, title, dates, and inspection owner for Zara at Dubai Festival City. Do you have any additional comments for this request?  ui='text_question'
+      ✓ Turn 2: Description accepted; bot asks for comments (last missing field)  2928ms
+          → Thanks — I’ve updated the description for Zara’s handover request. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: 'No additional comments' treated as valid comments value; confirmation card shown  2594ms
+          → Understood — I’ll proceed without additional comments for Zara’s handover request at Dubai Festival City. Please wait a moment while I process it.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 4: SR submitted successfully  2901ms  ref=3c42f875-601e-4ae6-9c7d-c83282920a33
+          → Done — your Handover Service Request has been submitted successfully for Zara at Dubai Festival City. Your reference number is 3c42f875-601e-4ae6-9c7d-c83282920a33, and you’ll be notified of any updat  ui='message'  stage='SR_CREATED'
+  PASSED (4/4 turns)
+
+▶ Scenario 4: Mall Name Only (Partial Search)
+  Test that a mall-only search resolves to the single Under Armour lease at Jawharat Jeddah
+      ✓ Turn 1: Bot asks for lease identifier (code, brand, or mall)  3462ms
+          → Absolutely — I can help with that. Please share the lease code, or the brand name and/or mall name so I can find the right lease.  ui='text_question'
+      ✓ Turn 2: Mall name alone resolves to t0105712 (Under Armour); all backend fields auto-filled  2706ms
+          → Thanks — I’ve noted Jawharat Jeddah Mall. Could you give me a short description of this handover request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Title accepted; bot asks for description  2664ms
+          → Got it — I’ve noted the Under Armour Jawharat handover. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Description accepted; bot asks for start date  2370ms
+          → Thanks — I’ve noted the description. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Start date accepted; bot asks for end date  2446ms
+          → Thanks — I’ve noted the inspection start date as 2026-06-15. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: End date accepted; bot asks for inspection done by  2490ms
+          → Thanks — I’ve noted the inspection end date as 2026-06-17. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Inspection done by accepted; bot asks for comments  2067ms
+          → Thanks — I’ve noted that the FM Manager will perform the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: All fields collected; confirmation card shown  3504ms
+          → Got it — I’ve added your note to schedule this before the public opening. I’m processing the request now; please wait a moment.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 9: SR submitted successfully  3124ms  ref=2d6bdba9-7ba4-4fc2-9bb7-6a400720c3ec
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is 2d6bdba9-7ba4-4fc2-9bb7-6a400720c3ec, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (9/9 turns)
+
+▶ Scenario 5: Correction After Confirmation Card
+  Test updating a field after the confirmation card has been shown (end date change)
+      ✓ Turn 1: Bot asks for lease identifier  11935ms
+          → Absolutely — I can help with that. Could you share the lease code, or the brand name and/or mall name so I can find the right lease?  ui='text_question'
+      ✓ Turn 2: Nike Mall of Arabia (Jeddah) lease resolved  2109ms
+          → Got it — I’ve found lease code t0301144. Please give me a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Title accepted  2795ms
+          → Thanks — I’ve noted the description for Nike Mall of Arabia Handover. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Description accepted  2677ms
+          → Thanks — I’ve noted the updated description for Nike at Mall of Arabia, Jeddah. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Start date accepted  2436ms
+          → Thanks — I’ve noted the inspection start date as 2026-08-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: End date accepted  3234ms
+          → Thanks — I’ve noted the inspection end date as 2026-08-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Inspection done by accepted  1963ms
+          → Got it — FM Manager is selected. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: All fields collected; confirmation card shown with endDate=2026-08-03  2471ms
+          → Thanks — I’ve noted that there are no additional comments. I’m processing your Handover Service Request now, please wait a moment.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 9: Bot updates end date and shows a refreshed confirmation card with 2026-08-05  2668ms
+          → Got it — I’ve updated the inspection end date to 2026-08-05 for Nike at Mall of Arabia, Jeddah. Please wait a moment while I process the request.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 10: SR submitted with corrected end date 2026-08-05  2775ms  ref=dd4e4602-a885-4df8-bb94-b2d8bfc54f93
+          → Confirmed — your Handover Service Request for Nike at Mall of Arabia, Jeddah has been submitted successfully. Your reference number is dd4e4602-a885-4df8-bb94-b2d8bfc54f93, and you’ll be notified of a  ui='message'  stage='SR_CREATED'
+  PASSED (10/10 turns)
+
+▶ Scenario 6: Invalid Lease Code, Then Correct
+  Verify error handling when the lease lookup returns no results; flow resumes with correct code
+      ✓ Turn 1: Bot asks for lease identifier  3342ms
+          → Absolutely — I can help with that. Could you share the lease code, or the brand name and/or mall name so I can find the right lease?  ui='text_question'
+      ✓ Turn 2: Mock lookup returns 0 matches; bot apologises and asks to try again  2563ms
+          → Sorry, I couldn’t find a lease matching LC-TEST-999. Could you double-check the lease code, brand name, or mall name and send it again?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Correct lease code accepted; Nike Riyadh Park resolved; flow resumes  2215ms
+          → Got it — I’ve updated the lease code to t0208831. Could you give me a short description of this handover request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Title accepted  2573ms
+          → Thanks — I’ve got the description for Nike Riyadh Park Summer Handover. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Description accepted  2376ms
+          → Thanks — I’ve noted the updated description for Nike Riyadh Park units. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Start date accepted  2298ms
+          → Thanks — I’ve noted the inspection start date as 2026-09-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: End date accepted  2407ms
+          → Thanks — I’ve noted the inspection end date as 2026-09-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: Inspection done by accepted  2025ms
+          → Got it — Operations will perform the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 9: All fields collected; confirmation card shown  2412ms
+          → Thanks — I’ve noted that Units GF101 and GF102 both need inspection. I’m processing your request now; please wait a moment.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 10: SR submitted successfully  2625ms  ref=551df305-0c4b-429f-ae15-8e66582f9747
+          → Confirmed — your Handover Service Request has been submitted successfully. Your reference number is 551df305-0c4b-429f-ae15-8e66582f9747, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (10/10 turns)
+
+▶ Scenario 7: Cancel Mid-Flow and Restart
+  Verify cancel phrases clear session state so a fresh intent can be started
+      ✓ Turn 1: Bot asks for lease identifier  3222ms
+          → Absolutely — I can help with that. Could you share the lease code, or the brand name and/or mall name so I can find the right lease?  ui='text_question'
+      ✓ Turn 2: Nike Riyadh Park lease resolved  2458ms
+          → Got it — I’ve found lease code t0208831. Could you give me a short description for this handover request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: 'cancel' triggers supervisor reset; active agent cleared; state wiped  1167ms
+          → Of course — I’ve cleared everything and we can start fresh. What would you like to do next?  ui='message'
+      ✓ Turn 4: Fresh intent classification; t0419977 resolved via brand+mall search  2652ms
+          → Sure — I can help with that. Do you want to create a new handover request, update an existing one, approve one, or check the status of a request?  ui='message'  stage='CREATE_SR'
+      ✓ Turn 5: Title accepted  3139ms
+          → Thanks — I can help with that. Do you want to create a new handover request, update an existing one, approve one, or check the status of a request?  ui='message'  stage='CREATE_SR'
+      ✓ Turn 6: Description accepted  4390ms
+          → Thanks — I’ve noted “Q3 fit-out handover for Zara unit UF301.” When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Start date accepted  2406ms
+          → Thanks — I’ve got the inspection start date as 2026-10-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: End date accepted  2718ms
+          → Thanks — I’ve got the inspection end date as 2026-10-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 9: Inspection done by accepted  2082ms
+          → Got it — FM Manager is selected. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 10: All fields collected; confirmation card shown  2406ms
+          → No problem — I’ll leave comments blank. I’m processing your handover request for Zara at lease t0419977 now; please wait a moment.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 11: SR submitted successfully; prior Nike context must be gone  3091ms  ref=4531f649-b041-4f52-8650-27f818b90981
+          → Confirmed — your Handover Service Request for Zara at lease t0419977 has been submitted successfully. Your reference number is 4531f649-b041-4f52-8650-27f818b90981, and you’ll be notified of any updat  ui='message'  stage='SR_CREATED'
+  PASSED (11/11 turns)
+
+▶ Scenario 8: Ambiguous / Off-Topic Opening
+  Test that the supervisor asks for clarification on unclear and off-topic messages
+      ✓ Turn 1: Bot greets and asks what the user wants to do  18171ms ⚠ slow
+          → Hello! How can I help you with the Cenomi Mall Management Platform today?  ui='message'
+      ✓ Turn 2: Bot asks to clarify — create, update, approve, or check status?  3853ms
+          → I can help with that. What would you like to do with the lease?  ui='message'
+      ✓ Turn 3: Intent classified as CREATE_HANDOVER_SERVICE_REQUEST; bot asks for lease identifier  4433ms
+          → Of course — I can help create a new handover. Please share the lease code, or the brand name and/or mall name so I can find the right lease.  ui='text_question'
+      ✓ Turn 4: Lease resolved; bot asks for title  2258ms
+          → Got it — I’ve found lease t0105712. Please give me a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Title accepted; bot asks for description  2461ms
+          → Thanks — I’ve got the description for lease t0105712. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Description accepted  2492ms
+          → Thanks — I’ve updated the description for lease t0105712. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Start date accepted  3546ms
+          → Thanks — I’ve got the inspection start date as 2026-11-10. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: End date accepted  16636ms ⚠ slow
+          → Thanks — I’ve got the inspection end date as 2026-11-12. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 9: Inspection done by accepted  1967ms
+          → Got it — FM Manager is selected. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 10: All fields collected; confirmation card shown  2898ms
+          → No problem — I’ve noted that there are no comments for this request. I’m processing the handover now for lease t0105712.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 11: SR submitted successfully  2584ms  ref=894f7415-378f-418f-a03b-4d855c74f54b
+          → Done — your Handover Service Request has been successfully submitted for lease t0105712. Your reference number is 894f7415-378f-418f-a03b-4d855c74f54b, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (11/11 turns)
+
+▶ Scenario 9: Natural Language Dates
+  Verify the LLM correctly parses human-friendly date formats: 'first of November' → 2026-11-01, 'November 3rd' → 2026-11-03
+      ✓ Turn 1: Lease resolved; bot asks for title  3748ms
+          → Got it — I’ve started the handover request for lease t0105712. Please share a short description of the request.  ui='text_question'
+      ✓ Turn 2: Title accepted; bot asks for description  2673ms
+          → Thanks — I’ve noted the description for Under Armour Jeddah Q4 Handover. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Description accepted; bot asks for start date  2667ms
+          → Thanks — I’ve updated the description to “End-of-year fit-out handover for FF050 unit.” When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: LLM must parse 'first of November' as 2026-11-01  2461ms
+          → Thanks — I’ve set the inspection to start on 1 November. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: LLM must parse 'November 3rd' as 2026-11-03  2479ms
+          → Got it — the inspection will end on 3 November. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Inspection done by accepted; bot asks for comments  2096ms
+          → Thanks — I’ve noted FM Manager for the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: All fields collected; confirmation card must show 2026-11-01 and 2026-11-03  2542ms
+          → Noted — I’ve added your comment to coordinate with the FM team before finalising the schedule. Please review the details on the confirmation card and let me know if you’d like to proceed.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 8: SR submitted successfully  7047ms  ref=2969b5f5-d16f-40e4-8f32-b1dc1bf8f76b
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is 2969b5f5-d16f-40e4-8f32-b1dc1bf8f76b, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (8/8 turns)
+
+▶ Scenario 10: Date Range Violation then Fix (§4D/§4F)
+  End date before start date blocks submission; correcting end date clears error and shows card
+      ✓ Turn 1: Bot asks for lease identifier  3946ms
+          → Absolutely — I can help with that. Could you share the lease code, or the brand name and/or mall name so I can find the right lease?  ui='text_question'
+      ✓ Turn 2: Under Armour, Jawharat Jeddah resolved  2374ms
+          → Got it — I’ve found lease code t0105712. Please give me a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Description accepted; bot asks for start date  2935ms
+          → Thanks — I’ve noted the description. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Start date 2026-09-05 accepted; bot asks for end date  7121ms
+          → Thanks — I’ve noted the inspection start date as 2026-09-05. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: End 2026-09-03 < start 2026-09-05; must block — bot asks to correct end date  3213ms
+          → Thanks — the inspection start date is 2026-09-05, so the end date needs to be later than that. Could you provide a valid inspection end date?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Valid end date; bot asks for inspector  6660ms
+          → Thanks — the inspection end date is now set to 2026-09-07. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Inspector accepted; bot asks for comments  1932ms
+          → Got it — FM Manager is selected. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: All fields valid; confirmation card shown  2198ms
+          → Thanks — I’ve noted that there are no additional comments. I’m processing your Handover Service Request for lease t0105712 now.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 9: SR submitted  2196ms  ref=034047af-e0b1-4544-a2e3-58520517cdce
+          → Confirmed — your Handover Service Request has been submitted successfully for lease t0105712. Your reference number is 034047af-e0b1-4544-a2e3-58520517cdce, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (9/9 turns)
+
+▶ Scenario 11: Garbage Date Inputs Rejected (§4E)
+  Non-date placeholders (ASAP, TBD) are rejected and bot re-asks for a real date
+      ✓ Turn 1: Bot asks for lease identifier  3270ms
+          → Absolutely — I can help with that. Could you share the lease code, or the brand name and/or mall name so I can find the right lease?  ui='text_question'
+      ✓ Turn 2: Under Armour resolved  2115ms
+          → Got it — I’ve found lease code t0105712. Please give me a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Description accepted; bot asks for start date  2502ms
+          → Thanks — I’ve noted the description for lease code t0105712. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Non-date placeholder — bot must reject and re-ask for start date  2681ms
+          → Thanks — I’ve noted that you want it to start ASAP. Could you share the inspection start date?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Valid start date accepted; bot asks for end date  2258ms
+          → Thanks — I’ve noted the inspection start date as 2026-10-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Another placeholder — bot must reject and re-ask for end date  2127ms
+          → Thanks — I’ve noted the inspection start date as 2026-10-01. What date should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Valid end date accepted; bot asks for inspector  2469ms
+          → Thanks — I’ve noted the inspection end date as 2026-10-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: Inspector accepted; bot asks for comments  1949ms
+          → Got it — FM Manager is selected. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 9: All fields valid; confirmation card shown  2136ms
+          → Thanks — I’ve captured the details for lease t0105712. I’m processing your request now; please wait a moment.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 10: SR submitted  2442ms  ref=2cd0ccc0-7252-49ee-9245-8d9a43abed51
+          → Confirmed — your Handover Service Request has been submitted successfully. Your reference number is 2cd0ccc0-7252-49ee-9245-8d9a43abed51, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (10/10 turns)
+
+▶ Scenario 12: Ambiguous Inspector Prompts Clarification (§5B)
+  Vague inspector input triggers FM Manager vs Operations re-ask; no guessing
+      ✓ Turn 1: Bot asks for lease identifier  3437ms
+          → Absolutely — I can help with that. Could you share the lease code, or the brand name and/or mall name so I can find the right lease?  ui='text_question'
+      ✓ Turn 2: Zara Dubai Festival City resolved  2332ms
+          → Got it — I’ve found lease t0419977. Please give me a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Description accepted  2577ms
+          → Thanks — I’ve noted the description for lease t0419977. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Start date accepted  2137ms
+          → Thanks — I’ve noted the inspection start date as 2026-11-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: End date accepted  2285ms
+          → Thanks — I’ve noted the inspection end date as 2026-11-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Ambiguous — bot must ask FM Manager or Operations?  2550ms
+          → Thanks — please choose one of these two options for who will perform the inspection: FM Manager or Operations.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Enum resolved to OPERATIONS; bot asks for comments  2202ms
+          → Thanks — I’ve noted that Operations will perform the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: All fields collected; confirmation card shown  2324ms
+          → Thanks — I’ve captured the details for lease t0419977 and the request is ready to proceed. Would you like me to submit it now?  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 9: SR submitted  2229ms  ref=54c99008-0c78-4b83-a45a-61a13ee967ae
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is 54c99008-0c78-4b83-a45a-61a13ee967ae, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (9/9 turns)
+
+▶ Scenario 13: Brand and Mall Combo — Direct Resolution (§2E)
+  'Nike at Riyadh Park' resolves directly without a lease_selection card
+      ✓ Turn 1: Nike + Riyadh Park unambiguous — bot resolves t0208831 and asks for description (no selection card)  3937ms
+          → Got it — I’ve noted the handover request for Nike at Riyadh Park. Please share a short description of the request.  ui='text_question'
+      ✓ Turn 2: Description accepted  2544ms
+          → Got it — I’ve noted the fit-out inspection for Nike at Riyadh Park. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Start date accepted  3389ms
+          → Thanks — I’ve noted the inspection start date as 2026-07-10. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: End date accepted  2321ms
+          → Thanks — I’ve noted the inspection end date as 2026-07-12. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Inspector accepted  2633ms
+          → Thanks — I’ve noted that Operations will perform the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: All fields collected; confirmation card shown  2094ms
+          → Thanks — I’ve noted that there are no additional comments. I’m processing your Handover Service Request for Nike at Riyadh Park now.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 7: SR submitted  2289ms  ref=ed481e19-e308-4db0-bb1f-75f26c6406a7
+          → Confirmed — your Handover Service Request for Nike at Riyadh Park has been submitted successfully. Your reference number is ed481e19-e308-4db0-bb1f-75f26c6406a7, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (7/7 turns)
+
+▶ Scenario 14: Restart After Confirmation Card (§10B)
+  'start over' at card stage clears all state; new request opens without context leak
+      ✓ Turn 1: Bot asks for lease identifier  3293ms
+          → Absolutely — I can help with that. Could you share the lease code, or the brand name and/or mall name so I can find the right lease?  ui='text_question'
+      ✓ Turn 2: Under Armour resolved  2092ms
+          → Got it — I’ve found lease code t0105712. Please give me a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Description accepted  2416ms
+          → Thanks — I’ve noted the description. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Start date accepted  2316ms
+          → Thanks — I’ve noted the inspection start date as 2026-06-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: End date accepted  2113ms
+          → Thanks — I’ve noted the inspection end date as 2026-06-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Inspector accepted  2161ms
+          → Thanks — I’ve noted that the FM Manager will perform the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: All fields collected; confirmation card shown  2111ms
+          → Thanks — I’ve noted that there are no additional comments. I’m processing your handover request for lease t0105712 now; please wait a moment.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 8: State cleared at card stage; bot asks what to do next  1285ms
+          → Sure — I’ve cleared everything. What would you like to do next?  ui='message'
+      ✓ Turn 9: Fresh intent; t0419977 resolved; no Under Armour context leaks  2879ms
+          → Sure — I can help with that. Do you want to create a new handover request, update an existing one, approve one, or check the status of a request?  ui='message'  stage='CREATE_SR'
+      ✓ Turn 10: Description accepted  4148ms
+          → I couldn’t find a matching lease from that yet. Could you share the lease code, or alternatively the brand name and/or mall name?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 11: Start date accepted  2412ms
+          → I couldn’t match a lease from that date alone. Could you share the lease code, or the brand name and/or mall name?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 12: End date accepted  2258ms
+          → I couldn’t match a lease from that date alone. Could you share the lease code, or the brand name and/or mall name?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 13: Inspector accepted  2389ms
+          → Got it — Operations will perform the inspection. I still couldn’t find a matching lease; could you share the lease code, or the brand name and/or mall name?  ui='text_question'  stage='CREATE_SR'
+      ✗ Turn 14: All fields collected — Zara, not Under Armour; confirmation card shown  2472ms
+          FAIL ui.type: expected 'confirmation_card', got 'text_question'
+          → Thanks — I’ve noted that. I still couldn’t find a matching lease; could you share the lease code, or the brand name and/or mall name?  ui='text_question'  stage='CREATE_SR'
+  FAILED (13/15 turns — stopped at turn 14)
+
+▶ Scenario 15: Off-Topic and Unsupported Intents (§1C)
+  Lease renewal and weather queries are UNKNOWN; bot clarifies or politely declines
+      ✓ Turn 1: Lease renewal is UNKNOWN — bot asks what the user wants to do  3525ms
+          → I can help with that. To get started, which mall and brand is the lease for?  ui='message'
+      ✓ Turn 2: Off-topic — bot politely declines or redirects to handover  3229ms
+          → I’m sorry, I can’t provide live weather updates here. If you’d like, I can still help with your lease renewal — which mall and brand is the lease for?  ui='message'
+      ✓ Turn 3: Clear handover intent — bot asks for lease identifier  3485ms
+          → Absolutely — I can help you create a new handover request. Please share the lease code, or the brand name and/or mall name so I can find the lease.  ui='text_question'
+      ✓ Turn 4: Nike Mall of Arabia resolved  14046ms
+          → Got it — I’ve found the lease code t0301144. Please share a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Description accepted  2644ms
+          → Got it — I’ve noted the description for lease t0301144. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Start date accepted  2404ms
+          → Thanks — I’ve noted the inspection start date as 2026-12-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: End date accepted  2774ms
+          → Thanks — I’ve noted the inspection end date as 2026-12-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: Inspector accepted  2623ms
+          → Thanks — I’ve noted that the FM Manager will perform the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 9: Confirmation card shown  2491ms
+          → No problem — I’ve left the comments blank. I’m processing your Handover Service Request for lease t0301144 now, please wait a moment.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 10: SR submitted  2309ms  ref=9a859b01-f289-4de6-ab0d-c53c485166d9
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is 9a859b01-f289-4de6-ab0d-c53c485166d9, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (10/10 turns)
+
+▶ Scenario 16: API corrected_fields — Single Field Update (§12A)
+  corrected_fields with endDate sent alongside action=confirm updates and submits in one shot
+      ✓ Turn 1: All fields extracted in one message; confirmation card shown  18483ms ⚠ slow
+          → Got it — I’ve captured the handover request for lease t0105712 with the dates and FM Manager selected. Please wait a moment while I process it.  ui='confirmation_card'
+      ✓ Turn 2: corrected_fields updates endDate to 2026-06-10; SR submitted with new value  6716ms  ref=5c2da5eb-64a8-4be5-ae90-0bb6a6696274
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is 5c2da5eb-64a8-4be5-ae90-0bb6a6696274, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (2/2 turns)
+
+▶ Scenario 17: API corrected_fields — Multiple Fields Update (§12B)
+  Multiple corrected_fields applied simultaneously before submission
+      ✓ Turn 1: All fields extracted; confirmation card shown  4109ms
+          → Got it — I’ve captured the handover request for lease t0105712 with the dates and FM Manager selected. Please confirm to proceed, or let me know if you’d like to change anything.  ui='confirmation_card'
+      ✓ Turn 2: Both endDate and comments updated via corrected_fields; SR submitted  2454ms  ref=8f9e599f-f8be-4f4f-b8b4-999cbd50b52f
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is 8f9e599f-f8be-4f4f-b8b4-999cbd50b52f, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (2/2 turns)
+
+▶ Scenario 18: API corrected_fields — Date Range Violation Blocks Submission (§12D)
+  corrected_fields making start > end triggers blocking validation; bot asks to fix dates
+      ✓ Turn 1: All fields extracted; confirmation card shown  4420ms
+          → Thanks — I’ve captured the lease t0208831 details and the inspection dates. Please note the start date must be before the end date; could you correct the dates and resend them?  ui='confirmation_card'
+      ✓ Turn 2: corrected_fields sets startDate=2026-09-10 which exceeds endDate=2026-09-03; must block  5331ms
+          → The end date needs to be later than the start date. Right now the start date is 2026-09-10, so please provide a valid end date after that.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Valid end date fixes the range; confirmation card re-shown  3542ms
+          → Got it — I’ve updated the end date to 2026-09-15. Please confirm if you’d like me to proceed with the request.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 4: SR submitted with corrected dates  2243ms  ref=d871224d-c74c-43d3-8499-0303fda95db0
+          → Confirmed — your Handover Service Request for lease t0208831 has been submitted successfully. Your reference number is d871224d-c74c-43d3-8499-0303fda95db0, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (4/4 turns)
+
+▶ Scenario 19: API selected_lease_id — Lease Selection via API Field (§13A/§13B)
+  selected_lease_id bypasses text search and resolves the specified lease directly
+      ✓ Turn 1: Two Nike leases found; lease_selection card shown  8346ms
+          → I found multiple Nike leases, so please choose the correct one from the list shown and I’ll continue with the handover request.  ui='lease_selection'
+      ✓ Turn 2: selected_lease_id=t0208831 selects Nike Riyadh Park; bot asks for description  2395ms
+          → Got it — I’ve noted lease code t0208831. Please share a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Description accepted  2576ms
+          → Thanks — I’ve noted the lease and description. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Start date accepted  2425ms
+          → Thanks — I’ve noted the inspection start date as 2026-10-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: End date accepted  2369ms
+          → Thanks — I’ve noted the inspection end date as 2026-10-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Inspector accepted  1995ms
+          → Thanks — I’ve noted FM Manager. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: All fields collected; confirmation card shown  2137ms
+          → No problem — I’ve noted that there are no additional comments. I’m processing your handover request for lease t0208831 now.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 8: SR submitted  2355ms  ref=3c7fcddc-b2d0-4f1c-8944-61e81b768551
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is 3c7fcddc-b2d0-4f1c-8944-61e81b768551, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (8/8 turns)
+
+▶ Scenario 20: Title Auto-Generation Verification (§15)
+  Confirmation card title follows handover-{lease_code}-{first-5-words-slug} pattern
+      ✓ Turn 1: All fields extracted; title in card must be handover-t0105712-standard-fitout-inspection-for-new  5860ms
+          → Got it — I’ve captured the handover request for lease t0105712 with the standard fit-out inspection details and FM Manager assigned. Please wait a moment while I process it.  ui='confirmation_card'
+      ✓ Turn 2: SR submitted  2220ms  ref=01cefe88-18ab-455c-8ac5-3a0855bb3b4d
+          → Confirmed — your Handover Service Request has been submitted successfully for lease t0105712. Your reference number is 01cefe88-18ab-455c-8ac5-3a0855bb3b4d, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (2/2 turns)
+
+▶ Scenario 21: Boundary and Special-Character Inputs (§14B/§14D)
+  Whitespace-only and emoji messages handled gracefully without crash
+      ✓ Turn 1: Whitespace-only — bot responds gracefully (no crash or 500)  3409ms
+          → I’m sorry, I don’t have enough information yet to help with that. Could you share a bit more about what you need?  ui='message'
+      ✓ Turn 2: Emoji in message — intent recognised; lease t0105712 extracted  4116ms
+          → Got it — I’ve noted lease t0105712. Please share a short description of the handover request.  ui='text_question'
+      ✓ Turn 3: Description accepted  2509ms
+          → Thanks — I’ve noted the description. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Start date accepted  2568ms
+          → Thanks — I’ve noted the inspection start date as 2026-06-01. What date should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: End date accepted  2416ms
+          → Thanks — I’ve noted the inspection end date as 2026-06-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Inspector accepted  2365ms
+          → Thanks — I’ve noted FM Manager for the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Confirmation card shown  2136ms
+          → No problem — I’ve noted that there are no additional comments. I’m processing the Handover Service Request for lease t0105712 now.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 8: SR submitted  2676ms  ref=5ef9ce3f-3204-4f9b-97dd-972b8b6fc307
+          → Confirmed — your Handover Service Request has been submitted successfully for lease t0105712. Your reference number is 5ef9ce3f-3204-4f9b-97dd-972b8b6fc307, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (8/8 turns)
+
+▶ Scenario 22: API corrected_fields — Protected Fields Silently Ignored (§12C)
+  lease_id and brand_id in corrected_fields are ignored; only endDate is applied
+      ✓ Turn 1: All fields extracted; confirmation card shown  4088ms
+          → Got it — I’ve captured the handover request for lease t0105712 with the dates and FM Manager selected. Please confirm if you’d like me to proceed.  ui='confirmation_card'
+      ✓ Turn 2: lease_id=99999 and brand_id=999 silently ignored; only endDate=2026-06-10 applied; SR submitted  2324ms  ref=27937d67-5b72-49e0-9eb6-8997cd02a61f
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is 27937d67-5b72-49e0-9eb6-8997cd02a61f, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (2/2 turns)
+
+▶ Scenario 23: Brand Search — Single Match Auto-Resolve (§2)
+  'Under Armour' brand name alone resolves to the single t0105712 lease; no selection card shown
+      ✓ Turn 1: Bot asks for lease code, brand, or mall  3454ms
+          → Absolutely — I can help with that. Please share the lease code, or the brand name and/or mall name so I can find the right lease.  ui='text_question'
+      ✓ Turn 2: Single match for Under Armour → t0105712 auto-resolved; no lease_selection card; bot asks for description  2336ms
+          → Got it — I’ve noted Under Armour. To keep this handover request moving, please give me a short description of the request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Description accepted; bot asks for start date  2269ms
+          → Thanks — I’ve noted the description. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Start date accepted; bot asks for end date  2178ms
+          → Thanks — I’ve noted the inspection start date as 2026-06-15. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: End date accepted; bot asks for inspector  3044ms
+          → Thanks — I’ve noted the inspection end date as 2026-06-17. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Inspector accepted; bot asks for comments  2525ms
+          → Thanks — I’ve noted FM Manager. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: All fields collected; confirmation card shown  2458ms
+          → Got it — I’ve added your note to schedule this before the public opening. I’m processing the request now; please wait a moment.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 8: SR submitted successfully  2102ms  ref=8762a89d-bb71-45da-bcd3-66cc584a16b8
+          → Done — your Handover Service Request has been submitted successfully for lease t0105712. Your reference number is 8762a89d-bb71-45da-bcd3-66cc584a16b8, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (8/8 turns)
+
+▶ Scenario 24: Partial Multi-Field Extraction Mid-Flow (§5)
+  After lease resolution, volunteering description + dates + inspector in one message skips all those turns and asks only for comments
+      ✓ Turn 1: Bot asks for lease identifier  3502ms
+          → Absolutely — I can help with that. Please share the lease code, or the brand name and/or mall name so I can find the right lease.  ui='text_question'
+      ✓ Turn 2: Nike Riyadh Park resolved; bot asks for description  2556ms
+          → Got it — I’ve found lease code t0208831. Please give me a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Bot extracts description + startDate + endDate + inspector simultaneously; must ask ONLY for comments  2848ms
+          → Thanks — I’ve got the details for Nike at Riyadh Park. Could you add any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Comments stored; confirmation card shown  2389ms
+          → Thanks — I’ve noted that Units GF101 and GF102 both need inspection. Please review the details on the card and confirm if everything looks correct.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 5: SR submitted successfully  16981ms ⚠ slow  ref=99d31027-87d4-49e6-a71c-da5006c4e5df
+          → Confirmed — your Handover Service Request has been submitted successfully. Your reference number is 99d31027-87d4-49e6-a71c-da5006c4e5df, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (5/5 turns)
+
+▶ Scenario 25: Multi-Field Combo 17A — Lease + Description (§17A)
+  Lease code and description provided together; bot stores both and asks ONLY for start date — does not re-ask for lease or description
+      ✓ Turn 1: Lease and description extracted simultaneously; bot asks ONLY for start date  3988ms
+          → Got it — I’ve noted the handover request for lease t0105712 and the fit-out inspection for FF050 unit. When should the inspection start?  ui='text_question'
+      ✓ Turn 2: Start date accepted; bot asks for end date  2175ms
+          → Thanks — I’ve noted the inspection start date as 2026-06-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: End date accepted; bot asks for inspector  1923ms
+          → Thanks — I’ve noted the inspection end date as 2026-06-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Inspector accepted; bot asks for comments  2455ms
+          → Thanks — I’ve noted that the FM Manager will perform the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: All fields collected; confirmation card shown  2631ms
+          → Thanks — I’ve noted that there are no additional comments. I’m processing your handover request for lease t0105712 now.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 6: SR submitted; lease and description must not have been re-asked  2491ms  ref=ed4001b3-d514-4631-ac38-6df283652a42
+          → Done — your Handover Service Request has been submitted successfully for lease t0105712. Your reference number is ed4001b3-d514-4631-ac38-6df283652a42, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (6/6 turns)
+
+▶ Scenario 26: Multi-Field Combo 17B — Lease + Description + Start Date (§17B)
+  Three fields provided at once; bot asks ONLY for end date, does not re-ask lease, description, or start date
+      ✓ Turn 1: Lease, description, and start date extracted; bot asks ONLY for end date  3774ms
+          → Thanks — I’ve got the handover request details for lease t0105712, with the inspection starting on 2026-06-01. When should the inspection end?  ui='text_question'
+      ✓ Turn 2: End date accepted; bot asks for inspector  2872ms
+          → Thanks — I’ve got the inspection end date as 2026-06-05. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Inspector accepted; bot asks for comments  2268ms
+          → Got it — FM Manager is selected. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: All fields collected; confirmation card shown  2492ms
+          → Thanks — I’ve noted there are no additional comments. I’m processing the handover request for lease t0105712 now, please wait a moment.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 5: SR submitted  2571ms  ref=79041539-a1ed-4ffb-ba7e-c5aa0f6121db
+          → Confirmed — your Handover Service Request has been submitted successfully for lease t0105712. Your reference number is 79041539-a1ed-4ffb-ba7e-c5aa0f6121db, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (5/5 turns)
+
+▶ Scenario 27: Multi-Field Combo 17C — Lease + Description + Both Dates (§17C)
+  Four fields in one message; bot asks ONLY for inspector and comments; does not re-ask lease, description, or dates
+      ✓ Turn 1: Lease, description, startDate, endDate extracted; bot asks ONLY for inspector  4149ms
+          → Got it — I’ve noted the Pre-opening check for lease t0105712, with inspection from June 10 to June 12, 2026. Who will perform the inspection: FM Manager or Operations?  ui='text_question'
+      ✓ Turn 2: Inspector accepted; bot asks for comments  2125ms
+          → Thanks — I’ve noted Operations. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Comments stored; confirmation card shown  2297ms
+          → Thanks — I’ve noted your comment: “Please coordinate with site team.” Please wait a moment while I process the request.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 4: SR submitted  2685ms  ref=6cddf400-349a-4e4a-bdaa-6d7986317419
+          → Confirmed — your Handover Service Request has been submitted successfully for lease t0105712. Your reference number is 6cddf400-349a-4e4a-bdaa-6d7986317419, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (4/4 turns)
+
+▶ Scenario 28: Multi-Field Combo 17D — 5 Fields at Once, Only Comments Missing (§17D)
+  Lease, description, both dates, and inspector provided simultaneously; bot asks ONLY for comments in a single follow-up
+      ✓ Turn 1: All 5 fields extracted; bot must ask ONLY for comments  3936ms
+          → Thanks — I’ve got the lease, description, dates, and that the inspection will be handled by the FM Manager. Do you have any additional comments for this request?  ui='text_question'
+      ✓ Turn 2: Comments stored; confirmation card shown  2061ms
+          → Thanks — I’ve added that comment. Please confirm if you’d like me to submit the handover service request for lease t0105712.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 3: SR submitted; bot never re-asked lease, description, dates, or inspector  2868ms  ref=b7da060a-3e87-43e2-b68f-927c21e102e4
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is b7da060a-3e87-43e2-b68f-927c21e102e4, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (3/3 turns)
+
+▶ Scenario 29: Multi-Field Input with Invalid Date Range — Conversational (§18A)
+  All fields extracted from one message but startDate > endDate; bot blocks confirmation, surfaces date error, and preserves other fields; corrected dates in next message unlock confirmation
+      ✓ Turn 1: All fields extracted; start > end detected; bot must block and ask for corrected dates  18195ms ⚠ slow
+          → Thanks — I’ve got the details for t0208831 and the inspection start date is 2026-09-10. Please provide a new end date that is later than 2026-09-10.  ui='text_question'
+      ✓ Turn 2: Both dates corrected in one message; validation passes; bot asks for comments (inspector preserved)  2694ms
+          → Got it — I’ve updated the inspection dates to 2026-09-01 through 2026-09-05. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Confirmation card shown  2125ms
+          → No problem — I’ll leave the comments blank and proceed with the Handover Service Request for t0208831.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 4: SR submitted with corrected dates  2378ms  ref=ba4ade90-a298-40a1-8e0f-125339ac3d2e
+          → Done — your Handover Service Request for t0208831 has been submitted successfully. Your reference number is ba4ade90-a298-40a1-8e0f-125339ac3d2e, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (4/4 turns)
+
+▶ Scenario 30: Multi-Field Input Without Lease Code (§19)
+  All fields except lease code provided in one message; bot extracts and stores them, then asks ONLY for lease code; after lease resolution, bot skips all already-collected fields and asks ONLY for comments
+      ✓ Turn 1: Handover intent detected; description, dates, inspector extracted; bot asks ONLY for lease code  4475ms
+          → Got it — I’ve noted the handover request details for the fit-out inspection from 2026-07-01 to 2026-07-03, to be handled by the FM Manager. I couldn’t find a lease from the details provided — could yo  ui='text_question'
+      ✓ Turn 2: Nike Mall of Arabia resolved; all prior fields preserved; bot asks ONLY for comments  2233ms
+          → Got it — I’ve found the lease code t0301144. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Comments stored; confirmation card shown  2672ms
+          → Noted — I’ve added that comment to the request. Please confirm if you’d like me to proceed with creating the handover service request.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 4: SR submitted; bot must not have re-asked for description, dates, or inspector  2952ms  ref=cdd401de-e14c-4e83-a19f-1c690c8744eb
+          → Done — your Handover Service Request has been submitted successfully. Your reference number is cdd401de-e14c-4e83-a19f-1c690c8744eb, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (4/4 turns)
+
+▶ Scenario 31: Past Date Rejection and Correction (§20A)
+  A start date in the past (2025-01-01) is rejected with a clear error; the user provides a valid future date and the flow continues normally
+      ✓ Turn 1: Lease resolved; bot asks for description  5588ms
+          → Got it — I’ve noted lease code t0105712. Please share a short description of the handover request.  ui='text_question'
+      ✓ Turn 2: Description accepted; bot asks for start date  3389ms
+          → Thanks — I’ve noted the description for t0105712: Annual fit-out audit for FF050 unit. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Past date must be rejected; bot asks for a future start date  2350ms
+          → Thanks — I’ve noted the inspection start date as 2025-01-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Valid future date accepted; bot asks for end date  2121ms
+          → Thanks — I’ve noted the inspection end date as 2026-10-01. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: End date accepted; bot asks for inspector  2267ms
+          → Thanks — I’ve noted the inspection dates. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Inspector accepted; bot asks for comments  2390ms
+          → Thanks — I’ve noted FM Manager for the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: All fields collected; confirmation card shown  2552ms
+          → No problem — I’ve left the comments blank. I’m processing the request for lease t0105712 now.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 8: SR submitted  2178ms  ref=b8f850f6-cf96-40a6-9687-6aa5ae943ff0
+          → Confirmed — your Handover Service Request has been submitted successfully. Your reference number is b8f850f6-cf96-40a6-9687-6aa5ae943ff0, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (8/8 turns)
+
+▶ Scenario 32: Multiple SRs in the Same Session (§15)
+  After successfully submitting an SR for Under Armour, the user raises a second SR for Zara in the same session; no Under Armour data leaks into the second request
+      ✓ Turn 1: SR 1 start: bot asks for lease  5209ms
+          → Absolutely — I can help with that. Could you share the lease code, or alternatively the brand name and/or mall name?  ui='text_question'
+      ✓ Turn 2: Under Armour Jawharat Jeddah resolved  16850ms ⚠ slow
+          → Got it — I’ve found lease code t0105712. Please share a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 3: Description accepted  3019ms
+          → Thanks — I’ve noted the description for lease t0105712. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Start date accepted  16599ms ⚠ slow
+          → Thanks — I’ve noted the inspection start date as 2026-06-01. What date should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: End date accepted  5912ms
+          → Thanks — I’ve noted the inspection end date as 2026-06-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: Inspector accepted  1916ms
+          → Thanks — I’ve noted that the FM Manager will perform the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Confirmation card shown (Under Armour)  2176ms
+          → Got it — I’ve noted that there are no comments for SR 1. Please confirm if you’d like me to proceed with creating the handover service request.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 8: SR 1 submitted; session continues  2097ms  ref=fc34a0fe-9152-4dc5-ba77-d71b4712f70b
+          → Confirmed — your Handover Service Request has been submitted successfully. Your reference number is fc34a0fe-9152-4dc5-ba77-d71b4712f70b, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+      ✗ Turn 9: Bot recognises new intent; asks for lease; SR 1 data not leaked  2487ms
+          FAIL workflow_stage: expected 'CREATE_SR', got 'SR_CREATED'
+          → Absolutely — I can help raise another handover request. Please share the lease code for the new unit.  ui='message'  stage='SR_CREATED'
+  FAILED (8/16 turns — stopped at turn 9)
+
+▶ Scenario 33: Injection Guard and Adversarial Inputs (§14)
+  Prompt injection attempt is handled safely without crashing or leaking system context; subsequent normal request proceeds correctly
+      ✓ Turn 1: Bot declines safely; no system prompt revealed; no crash  25ms
+          → I'm sorry, but I can't process that request. If you need help with a Handover Service Request, please describe what you'd like to do.  ui='message'
+      ✓ Turn 2: Normal intent classification resumes after injection attempt; bot asks for lease  3543ms
+          → Absolutely — I can help create the handover service request. Could you share the lease code, or alternatively the brand name and/or mall name?  ui='text_question'
+      ✓ Turn 3: Lease resolved; bot asks for description  2126ms
+          → Got it — I’ve found lease code t0105712. Please share a short description of this handover request.  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 4: Description accepted; bot asks for start date  2167ms
+          → Thanks — I’ve noted the description for lease t0105712. When should the inspection start?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 5: Start date accepted  1967ms
+          → Thanks — I’ve noted the inspection start date as 2026-06-01. When should the inspection end?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 6: End date accepted  2696ms
+          → Thanks — I’ve noted the inspection end date as 2026-06-03. Who will perform the inspection: FM Manager or Operations?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 7: Inspector accepted  2017ms
+          → Thanks — I’ve noted FM Manager for the inspection. Do you have any additional comments for this request?  ui='text_question'  stage='CREATE_SR'
+      ✓ Turn 8: Confirmation card shown  2146ms
+          → No problem — I’ve noted that there are no comments. I’m processing your Handover Service Request for lease t0105712 now.  ui='confirmation_card'  stage='CREATE_SR'
+      ✓ Turn 9: SR submitted; backend unaffected by prior injection attempt  2131ms  ref=b33b80f6-3667-4afb-ae33-09249c595dfb
+          → Confirmed — your Handover Service Request has been submitted successfully for lease t0105712. Your reference number is b33b80f6-3667-4afb-ae33-09249c595dfb, and you’ll be notified of any updates.  ui='message'  stage='SR_CREATED'
+  PASSED (9/9 turns)
+
+
+════════════════════════════════════════════════════════════════════════
+  CHATBOT EVALUATION REPORT — Handover Service Request
+════════════════════════════════════════════════════════════════════════
+
+  Scenario 1  Happy Path (Lease Code Known)  [PASSED]
+  Full flow: intent → lease resolution → 6 field turns → confirmation card → submission
+    ✓ Turn 1: Bot should ask for lease code, brand, or mall name  (3289ms)  (ui=text_question)
+    ✓ Turn 2: Lease auto-resolved (Under Armour, Jawharat Jeddah); bot asks for title  (2199ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Title accepted; bot asks for description  (2277ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Description accepted; bot asks for start date  (2300ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Start date accepted; bot asks for end date  (2252ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: End date accepted; bot asks for inspection done by  (2198ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Inspection done by accepted; bot asks for comments  (2180ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: All fields collected; confirmation card must be shown  (2614ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 9: SR submitted; response contains UUID reference and SR_CREATED stage  (2620ms)  (ui=message  stage=SR_CREATED  ref=cbb03bf4-734e-449b-907f-26c2ba804f3a)
+  9/9 turns passed
+
+  Scenario 2  Brand + Mall Search (No Lease Code)  [PASSED]
+  Test free-text lease search and multi-match selection card for Nike
+    ✓ Turn 1: Lease lookup finds 2 Nike leases; lease_selection card must appear  (5249ms)  (ui=lease_selection)
+    ✓ Turn 2: User selects Nike Riyadh Park via text; lease auto-filled, bot asks for title  (2409ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Title accepted; bot asks for description  (2593ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Description accepted; bot asks for start date  (2590ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Start date accepted; bot asks for end date  (2303ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: End date accepted; bot asks for inspection done by  (2142ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Inspection done by accepted; bot asks for comments  (2342ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: All fields collected; confirmation card must be shown  (2257ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 9: SR submitted successfully  (2668ms)  (ui=message  stage=SR_CREATED  ref=91871bcd-7cd2-47c7-bd89-6f7200057c9b)
+  9/9 turns passed
+
+  Scenario 3  Full Details in One Message  [PASSED]
+  Verify the LLM extracts lease_code, title, startDate, endDate, and inspection_done_by from a single long message, then only asks for what's missing
+    ✓ Turn 1: LLM extracts title, dates, and inspector from one message; lease resolved; bot asks only for what's still missing (description or comments depending on extraction)  (4305ms)  (ui=text_question)
+    ✓ Turn 2: Description accepted; bot asks for comments (last missing field)  (2928ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: 'No additional comments' treated as valid comments value; confirmation card shown  (2594ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 4: SR submitted successfully  (2901ms)  (ui=message  stage=SR_CREATED  ref=3c42f875-601e-4ae6-9c7d-c83282920a33)
+  4/4 turns passed
+
+  Scenario 4  Mall Name Only (Partial Search)  [PASSED]
+  Test that a mall-only search resolves to the single Under Armour lease at Jawharat Jeddah
+    ✓ Turn 1: Bot asks for lease identifier (code, brand, or mall)  (3462ms)  (ui=text_question)
+    ✓ Turn 2: Mall name alone resolves to t0105712 (Under Armour); all backend fields auto-filled  (2706ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Title accepted; bot asks for description  (2664ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Description accepted; bot asks for start date  (2370ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Start date accepted; bot asks for end date  (2446ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: End date accepted; bot asks for inspection done by  (2490ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Inspection done by accepted; bot asks for comments  (2067ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: All fields collected; confirmation card shown  (3504ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 9: SR submitted successfully  (3124ms)  (ui=message  stage=SR_CREATED  ref=2d6bdba9-7ba4-4fc2-9bb7-6a400720c3ec)
+  9/9 turns passed
+
+  Scenario 5  Correction After Confirmation Card  [PASSED]
+  Test updating a field after the confirmation card has been shown (end date change)
+    ✓ Turn 1: Bot asks for lease identifier  (11935ms)  (ui=text_question)
+    ✓ Turn 2: Nike Mall of Arabia (Jeddah) lease resolved  (2109ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Title accepted  (2795ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Description accepted  (2677ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Start date accepted  (2436ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: End date accepted  (3234ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Inspection done by accepted  (1963ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: All fields collected; confirmation card shown with endDate=2026-08-03  (2471ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 9: Bot updates end date and shows a refreshed confirmation card with 2026-08-05  (2668ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 10: SR submitted with corrected end date 2026-08-05  (2775ms)  (ui=message  stage=SR_CREATED  ref=dd4e4602-a885-4df8-bb94-b2d8bfc54f93)
+  10/10 turns passed
+
+  Scenario 6  Invalid Lease Code, Then Correct  [PASSED]
+  Verify error handling when the lease lookup returns no results; flow resumes with correct code
+    ✓ Turn 1: Bot asks for lease identifier  (3342ms)  (ui=text_question)
+    ✓ Turn 2: Mock lookup returns 0 matches; bot apologises and asks to try again  (2563ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Correct lease code accepted; Nike Riyadh Park resolved; flow resumes  (2215ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Title accepted  (2573ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Description accepted  (2376ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Start date accepted  (2298ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: End date accepted  (2407ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: Inspection done by accepted  (2025ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 9: All fields collected; confirmation card shown  (2412ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 10: SR submitted successfully  (2625ms)  (ui=message  stage=SR_CREATED  ref=551df305-0c4b-429f-ae15-8e66582f9747)
+  10/10 turns passed
+
+  Scenario 7  Cancel Mid-Flow and Restart  [PASSED]
+  Verify cancel phrases clear session state so a fresh intent can be started
+    ✓ Turn 1: Bot asks for lease identifier  (3222ms)  (ui=text_question)
+    ✓ Turn 2: Nike Riyadh Park lease resolved  (2458ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: 'cancel' triggers supervisor reset; active agent cleared; state wiped  (1167ms)  (ui=message)
+    ✓ Turn 4: Fresh intent classification; t0419977 resolved via brand+mall search  (2652ms)  (ui=message  stage=CREATE_SR)
+    ✓ Turn 5: Title accepted  (3139ms)  (ui=message  stage=CREATE_SR)
+    ✓ Turn 6: Description accepted  (4390ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Start date accepted  (2406ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: End date accepted  (2718ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 9: Inspection done by accepted  (2082ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 10: All fields collected; confirmation card shown  (2406ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 11: SR submitted successfully; prior Nike context must be gone  (3091ms)  (ui=message  stage=SR_CREATED  ref=4531f649-b041-4f52-8650-27f818b90981)
+  11/11 turns passed
+
+  Scenario 8  Ambiguous / Off-Topic Opening  [PASSED]
+  Test that the supervisor asks for clarification on unclear and off-topic messages
+    ✓ Turn 1: Bot greets and asks what the user wants to do  (18171ms ⚠ slow)  (ui=message)
+    ✓ Turn 2: Bot asks to clarify — create, update, approve, or check status?  (3853ms)  (ui=message)
+    ✓ Turn 3: Intent classified as CREATE_HANDOVER_SERVICE_REQUEST; bot asks for lease identifier  (4433ms)  (ui=text_question)
+    ✓ Turn 4: Lease resolved; bot asks for title  (2258ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Title accepted; bot asks for description  (2461ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Description accepted  (2492ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Start date accepted  (3546ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: End date accepted  (16636ms ⚠ slow)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 9: Inspection done by accepted  (1967ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 10: All fields collected; confirmation card shown  (2898ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 11: SR submitted successfully  (2584ms)  (ui=message  stage=SR_CREATED  ref=894f7415-378f-418f-a03b-4d855c74f54b)
+  11/11 turns passed
+
+  Scenario 9  Natural Language Dates  [PASSED]
+  Verify the LLM correctly parses human-friendly date formats: 'first of November' → 2026-11-01, 'November 3rd' → 2026-11-03
+    ✓ Turn 1: Lease resolved; bot asks for title  (3748ms)  (ui=text_question)
+    ✓ Turn 2: Title accepted; bot asks for description  (2673ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Description accepted; bot asks for start date  (2667ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: LLM must parse 'first of November' as 2026-11-01  (2461ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: LLM must parse 'November 3rd' as 2026-11-03  (2479ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Inspection done by accepted; bot asks for comments  (2096ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: All fields collected; confirmation card must show 2026-11-01 and 2026-11-03  (2542ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 8: SR submitted successfully  (7047ms)  (ui=message  stage=SR_CREATED  ref=2969b5f5-d16f-40e4-8f32-b1dc1bf8f76b)
+  8/8 turns passed
+
+  Scenario 10  Date Range Violation then Fix (§4D/§4F)  [PASSED]
+  End date before start date blocks submission; correcting end date clears error and shows card
+    ✓ Turn 1: Bot asks for lease identifier  (3946ms)  (ui=text_question)
+    ✓ Turn 2: Under Armour, Jawharat Jeddah resolved  (2374ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Description accepted; bot asks for start date  (2935ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Start date 2026-09-05 accepted; bot asks for end date  (7121ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: End 2026-09-03 < start 2026-09-05; must block — bot asks to correct end date  (3213ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Valid end date; bot asks for inspector  (6660ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Inspector accepted; bot asks for comments  (1932ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: All fields valid; confirmation card shown  (2198ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 9: SR submitted  (2196ms)  (ui=message  stage=SR_CREATED  ref=034047af-e0b1-4544-a2e3-58520517cdce)
+  9/9 turns passed
+
+  Scenario 11  Garbage Date Inputs Rejected (§4E)  [PASSED]
+  Non-date placeholders (ASAP, TBD) are rejected and bot re-asks for a real date
+    ✓ Turn 1: Bot asks for lease identifier  (3270ms)  (ui=text_question)
+    ✓ Turn 2: Under Armour resolved  (2115ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Description accepted; bot asks for start date  (2502ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Non-date placeholder — bot must reject and re-ask for start date  (2681ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Valid start date accepted; bot asks for end date  (2258ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Another placeholder — bot must reject and re-ask for end date  (2127ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Valid end date accepted; bot asks for inspector  (2469ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: Inspector accepted; bot asks for comments  (1949ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 9: All fields valid; confirmation card shown  (2136ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 10: SR submitted  (2442ms)  (ui=message  stage=SR_CREATED  ref=2cd0ccc0-7252-49ee-9245-8d9a43abed51)
+  10/10 turns passed
+
+  Scenario 12  Ambiguous Inspector Prompts Clarification (§5B)  [PASSED]
+  Vague inspector input triggers FM Manager vs Operations re-ask; no guessing
+    ✓ Turn 1: Bot asks for lease identifier  (3437ms)  (ui=text_question)
+    ✓ Turn 2: Zara Dubai Festival City resolved  (2332ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Description accepted  (2577ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Start date accepted  (2137ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: End date accepted  (2285ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Ambiguous — bot must ask FM Manager or Operations?  (2550ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Enum resolved to OPERATIONS; bot asks for comments  (2202ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: All fields collected; confirmation card shown  (2324ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 9: SR submitted  (2229ms)  (ui=message  stage=SR_CREATED  ref=54c99008-0c78-4b83-a45a-61a13ee967ae)
+  9/9 turns passed
+
+  Scenario 13  Brand and Mall Combo — Direct Resolution (§2E)  [PASSED]
+  'Nike at Riyadh Park' resolves directly without a lease_selection card
+    ✓ Turn 1: Nike + Riyadh Park unambiguous — bot resolves t0208831 and asks for description (no selection card)  (3937ms)  (ui=text_question)
+    ✓ Turn 2: Description accepted  (2544ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Start date accepted  (3389ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: End date accepted  (2321ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Inspector accepted  (2633ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: All fields collected; confirmation card shown  (2094ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 7: SR submitted  (2289ms)  (ui=message  stage=SR_CREATED  ref=ed481e19-e308-4db0-bb1f-75f26c6406a7)
+  7/7 turns passed
+
+  Scenario 14  Restart After Confirmation Card (§10B)  [FAILED]
+  'start over' at card stage clears all state; new request opens without context leak
+    ✓ Turn 1: Bot asks for lease identifier  (3293ms)  (ui=text_question)
+    ✓ Turn 2: Under Armour resolved  (2092ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Description accepted  (2416ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Start date accepted  (2316ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: End date accepted  (2113ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Inspector accepted  (2161ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: All fields collected; confirmation card shown  (2111ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 8: State cleared at card stage; bot asks what to do next  (1285ms)  (ui=message)
+    ✓ Turn 9: Fresh intent; t0419977 resolved; no Under Armour context leaks  (2879ms)  (ui=message  stage=CREATE_SR)
+    ✓ Turn 10: Description accepted  (4148ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 11: Start date accepted  (2412ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 12: End date accepted  (2258ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 13: Inspector accepted  (2389ms)  (ui=text_question  stage=CREATE_SR)
+    ✗ Turn 14: All fields collected — Zara, not Under Armour; confirmation card shown  (2472ms)  (ui=text_question  stage=CREATE_SR)
+        FAIL ui.type: expected 'confirmation_card', got 'text_question'
+  13/15 turns passed  (stopped at turn 14 due to failure)
+
+  Scenario 15  Off-Topic and Unsupported Intents (§1C)  [PASSED]
+  Lease renewal and weather queries are UNKNOWN; bot clarifies or politely declines
+    ✓ Turn 1: Lease renewal is UNKNOWN — bot asks what the user wants to do  (3525ms)  (ui=message)
+    ✓ Turn 2: Off-topic — bot politely declines or redirects to handover  (3229ms)  (ui=message)
+    ✓ Turn 3: Clear handover intent — bot asks for lease identifier  (3485ms)  (ui=text_question)
+    ✓ Turn 4: Nike Mall of Arabia resolved  (14046ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Description accepted  (2644ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Start date accepted  (2404ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: End date accepted  (2774ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: Inspector accepted  (2623ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 9: Confirmation card shown  (2491ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 10: SR submitted  (2309ms)  (ui=message  stage=SR_CREATED  ref=9a859b01-f289-4de6-ab0d-c53c485166d9)
+  10/10 turns passed
+
+  Scenario 16  API corrected_fields — Single Field Update (§12A)  [PASSED]
+  corrected_fields with endDate sent alongside action=confirm updates and submits in one shot
+    ✓ Turn 1: All fields extracted in one message; confirmation card shown  (18483ms ⚠ slow)  (ui=confirmation_card)
+    ✓ Turn 2: corrected_fields updates endDate to 2026-06-10; SR submitted with new value  (6716ms)  (ui=message  stage=SR_CREATED  ref=5c2da5eb-64a8-4be5-ae90-0bb6a6696274)
+  2/2 turns passed
+
+  Scenario 17  API corrected_fields — Multiple Fields Update (§12B)  [PASSED]
+  Multiple corrected_fields applied simultaneously before submission
+    ✓ Turn 1: All fields extracted; confirmation card shown  (4109ms)  (ui=confirmation_card)
+    ✓ Turn 2: Both endDate and comments updated via corrected_fields; SR submitted  (2454ms)  (ui=message  stage=SR_CREATED  ref=8f9e599f-f8be-4f4f-b8b4-999cbd50b52f)
+  2/2 turns passed
+
+  Scenario 18  API corrected_fields — Date Range Violation Blocks Submission (§12D)  [PASSED]
+  corrected_fields making start > end triggers blocking validation; bot asks to fix dates
+    ✓ Turn 1: All fields extracted; confirmation card shown  (4420ms)  (ui=confirmation_card)
+    ✓ Turn 2: corrected_fields sets startDate=2026-09-10 which exceeds endDate=2026-09-03; must block  (5331ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Valid end date fixes the range; confirmation card re-shown  (3542ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 4: SR submitted with corrected dates  (2243ms)  (ui=message  stage=SR_CREATED  ref=d871224d-c74c-43d3-8499-0303fda95db0)
+  4/4 turns passed
+
+  Scenario 19  API selected_lease_id — Lease Selection via API Field (§13A/§13B)  [PASSED]
+  selected_lease_id bypasses text search and resolves the specified lease directly
+    ✓ Turn 1: Two Nike leases found; lease_selection card shown  (8346ms)  (ui=lease_selection)
+    ✓ Turn 2: selected_lease_id=t0208831 selects Nike Riyadh Park; bot asks for description  (2395ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Description accepted  (2576ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Start date accepted  (2425ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: End date accepted  (2369ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Inspector accepted  (1995ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: All fields collected; confirmation card shown  (2137ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 8: SR submitted  (2355ms)  (ui=message  stage=SR_CREATED  ref=3c7fcddc-b2d0-4f1c-8944-61e81b768551)
+  8/8 turns passed
+
+  Scenario 20  Title Auto-Generation Verification (§15)  [PASSED]
+  Confirmation card title follows handover-{lease_code}-{first-5-words-slug} pattern
+    ✓ Turn 1: All fields extracted; title in card must be handover-t0105712-standard-fitout-inspection-for-new  (5860ms)  (ui=confirmation_card)
+    ✓ Turn 2: SR submitted  (2220ms)  (ui=message  stage=SR_CREATED  ref=01cefe88-18ab-455c-8ac5-3a0855bb3b4d)
+  2/2 turns passed
+
+  Scenario 21  Boundary and Special-Character Inputs (§14B/§14D)  [PASSED]
+  Whitespace-only and emoji messages handled gracefully without crash
+    ✓ Turn 1: Whitespace-only — bot responds gracefully (no crash or 500)  (3409ms)  (ui=message)
+    ✓ Turn 2: Emoji in message — intent recognised; lease t0105712 extracted  (4116ms)  (ui=text_question)
+    ✓ Turn 3: Description accepted  (2509ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Start date accepted  (2568ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: End date accepted  (2416ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Inspector accepted  (2365ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Confirmation card shown  (2136ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 8: SR submitted  (2676ms)  (ui=message  stage=SR_CREATED  ref=5ef9ce3f-3204-4f9b-97dd-972b8b6fc307)
+  8/8 turns passed
+
+  Scenario 22  API corrected_fields — Protected Fields Silently Ignored (§12C)  [PASSED]
+  lease_id and brand_id in corrected_fields are ignored; only endDate is applied
+    ✓ Turn 1: All fields extracted; confirmation card shown  (4088ms)  (ui=confirmation_card)
+    ✓ Turn 2: lease_id=99999 and brand_id=999 silently ignored; only endDate=2026-06-10 applied; SR submitted  (2324ms)  (ui=message  stage=SR_CREATED  ref=27937d67-5b72-49e0-9eb6-8997cd02a61f)
+  2/2 turns passed
+
+  Scenario 23  Brand Search — Single Match Auto-Resolve (§2)  [PASSED]
+  'Under Armour' brand name alone resolves to the single t0105712 lease; no selection card shown
+    ✓ Turn 1: Bot asks for lease code, brand, or mall  (3454ms)  (ui=text_question)
+    ✓ Turn 2: Single match for Under Armour → t0105712 auto-resolved; no lease_selection card; bot asks for description  (2336ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Description accepted; bot asks for start date  (2269ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Start date accepted; bot asks for end date  (2178ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: End date accepted; bot asks for inspector  (3044ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Inspector accepted; bot asks for comments  (2525ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: All fields collected; confirmation card shown  (2458ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 8: SR submitted successfully  (2102ms)  (ui=message  stage=SR_CREATED  ref=8762a89d-bb71-45da-bcd3-66cc584a16b8)
+  8/8 turns passed
+
+  Scenario 24  Partial Multi-Field Extraction Mid-Flow (§5)  [PASSED]
+  After lease resolution, volunteering description + dates + inspector in one message skips all those turns and asks only for comments
+    ✓ Turn 1: Bot asks for lease identifier  (3502ms)  (ui=text_question)
+    ✓ Turn 2: Nike Riyadh Park resolved; bot asks for description  (2556ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Bot extracts description + startDate + endDate + inspector simultaneously; must ask ONLY for comments  (2848ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Comments stored; confirmation card shown  (2389ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 5: SR submitted successfully  (16981ms ⚠ slow)  (ui=message  stage=SR_CREATED  ref=99d31027-87d4-49e6-a71c-da5006c4e5df)
+  5/5 turns passed
+
+  Scenario 25  Multi-Field Combo 17A — Lease + Description (§17A)  [PASSED]
+  Lease code and description provided together; bot stores both and asks ONLY for start date — does not re-ask for lease or description
+    ✓ Turn 1: Lease and description extracted simultaneously; bot asks ONLY for start date  (3988ms)  (ui=text_question)
+    ✓ Turn 2: Start date accepted; bot asks for end date  (2175ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: End date accepted; bot asks for inspector  (1923ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Inspector accepted; bot asks for comments  (2455ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: All fields collected; confirmation card shown  (2631ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 6: SR submitted; lease and description must not have been re-asked  (2491ms)  (ui=message  stage=SR_CREATED  ref=ed4001b3-d514-4631-ac38-6df283652a42)
+  6/6 turns passed
+
+  Scenario 26  Multi-Field Combo 17B — Lease + Description + Start Date (§17B)  [PASSED]
+  Three fields provided at once; bot asks ONLY for end date, does not re-ask lease, description, or start date
+    ✓ Turn 1: Lease, description, and start date extracted; bot asks ONLY for end date  (3774ms)  (ui=text_question)
+    ✓ Turn 2: End date accepted; bot asks for inspector  (2872ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Inspector accepted; bot asks for comments  (2268ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: All fields collected; confirmation card shown  (2492ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 5: SR submitted  (2571ms)  (ui=message  stage=SR_CREATED  ref=79041539-a1ed-4ffb-ba7e-c5aa0f6121db)
+  5/5 turns passed
+
+  Scenario 27  Multi-Field Combo 17C — Lease + Description + Both Dates (§17C)  [PASSED]
+  Four fields in one message; bot asks ONLY for inspector and comments; does not re-ask lease, description, or dates
+    ✓ Turn 1: Lease, description, startDate, endDate extracted; bot asks ONLY for inspector  (4149ms)  (ui=text_question)
+    ✓ Turn 2: Inspector accepted; bot asks for comments  (2125ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Comments stored; confirmation card shown  (2297ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 4: SR submitted  (2685ms)  (ui=message  stage=SR_CREATED  ref=6cddf400-349a-4e4a-bdaa-6d7986317419)
+  4/4 turns passed
+
+  Scenario 28  Multi-Field Combo 17D — 5 Fields at Once, Only Comments Missing (§17D)  [PASSED]
+  Lease, description, both dates, and inspector provided simultaneously; bot asks ONLY for comments in a single follow-up
+    ✓ Turn 1: All 5 fields extracted; bot must ask ONLY for comments  (3936ms)  (ui=text_question)
+    ✓ Turn 2: Comments stored; confirmation card shown  (2061ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 3: SR submitted; bot never re-asked lease, description, dates, or inspector  (2868ms)  (ui=message  stage=SR_CREATED  ref=b7da060a-3e87-43e2-b68f-927c21e102e4)
+  3/3 turns passed
+
+  Scenario 29  Multi-Field Input with Invalid Date Range — Conversational (§18A)  [PASSED]
+  All fields extracted from one message but startDate > endDate; bot blocks confirmation, surfaces date error, and preserves other fields; corrected dates in next message unlock confirmation
+    ✓ Turn 1: All fields extracted; start > end detected; bot must block and ask for corrected dates  (18195ms ⚠ slow)  (ui=text_question)
+    ✓ Turn 2: Both dates corrected in one message; validation passes; bot asks for comments (inspector preserved)  (2694ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Confirmation card shown  (2125ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 4: SR submitted with corrected dates  (2378ms)  (ui=message  stage=SR_CREATED  ref=ba4ade90-a298-40a1-8e0f-125339ac3d2e)
+  4/4 turns passed
+
+  Scenario 30  Multi-Field Input Without Lease Code (§19)  [PASSED]
+  All fields except lease code provided in one message; bot extracts and stores them, then asks ONLY for lease code; after lease resolution, bot skips all already-collected fields and asks ONLY for comments
+    ✓ Turn 1: Handover intent detected; description, dates, inspector extracted; bot asks ONLY for lease code  (4475ms)  (ui=text_question)
+    ✓ Turn 2: Nike Mall of Arabia resolved; all prior fields preserved; bot asks ONLY for comments  (2233ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Comments stored; confirmation card shown  (2672ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 4: SR submitted; bot must not have re-asked for description, dates, or inspector  (2952ms)  (ui=message  stage=SR_CREATED  ref=cdd401de-e14c-4e83-a19f-1c690c8744eb)
+  4/4 turns passed
+
+  Scenario 31  Past Date Rejection and Correction (§20A)  [PASSED]
+  A start date in the past (2025-01-01) is rejected with a clear error; the user provides a valid future date and the flow continues normally
+    ✓ Turn 1: Lease resolved; bot asks for description  (5588ms)  (ui=text_question)
+    ✓ Turn 2: Description accepted; bot asks for start date  (3389ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Past date must be rejected; bot asks for a future start date  (2350ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Valid future date accepted; bot asks for end date  (2121ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: End date accepted; bot asks for inspector  (2267ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Inspector accepted; bot asks for comments  (2390ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: All fields collected; confirmation card shown  (2552ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 8: SR submitted  (2178ms)  (ui=message  stage=SR_CREATED  ref=b8f850f6-cf96-40a6-9687-6aa5ae943ff0)
+  8/8 turns passed
+
+  Scenario 32  Multiple SRs in the Same Session (§15)  [FAILED]
+  After successfully submitting an SR for Under Armour, the user raises a second SR for Zara in the same session; no Under Armour data leaks into the second request
+    ✓ Turn 1: SR 1 start: bot asks for lease  (5209ms)  (ui=text_question)
+    ✓ Turn 2: Under Armour Jawharat Jeddah resolved  (16850ms ⚠ slow)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 3: Description accepted  (3019ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Start date accepted  (16599ms ⚠ slow)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: End date accepted  (5912ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: Inspector accepted  (1916ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Confirmation card shown (Under Armour)  (2176ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 8: SR 1 submitted; session continues  (2097ms)  (ui=message  stage=SR_CREATED  ref=fc34a0fe-9152-4dc5-ba77-d71b4712f70b)
+    ✗ Turn 9: Bot recognises new intent; asks for lease; SR 1 data not leaked  (2487ms)  (ui=message  stage=SR_CREATED)
+        FAIL workflow_stage: expected 'CREATE_SR', got 'SR_CREATED'
+  8/16 turns passed  (stopped at turn 9 due to failure)
+
+  Scenario 33  Injection Guard and Adversarial Inputs (§14)  [PASSED]
+  Prompt injection attempt is handled safely without crashing or leaking system context; subsequent normal request proceeds correctly
+    ✓ Turn 1: Bot declines safely; no system prompt revealed; no crash  (25ms)  (ui=message)
+    ✓ Turn 2: Normal intent classification resumes after injection attempt; bot asks for lease  (3543ms)  (ui=text_question)
+    ✓ Turn 3: Lease resolved; bot asks for description  (2126ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 4: Description accepted; bot asks for start date  (2167ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 5: Start date accepted  (1967ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 6: End date accepted  (2696ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 7: Inspector accepted  (2017ms)  (ui=text_question  stage=CREATE_SR)
+    ✓ Turn 8: Confirmation card shown  (2146ms)  (ui=confirmation_card  stage=CREATE_SR)
+    ✓ Turn 9: SR submitted; backend unaffected by prior injection attempt  (2131ms)  (ui=message  stage=SR_CREATED  ref=b33b80f6-3667-4afb-ae33-09249c595dfb)
+  9/9 turns passed
+
+════════════════════════════════════════════════════════════════════════
+  SUMMARY  31/33 scenarios passed  (231/241 turns)  775.6s total
+
+  ✗ Scenario 14 (Restart After Confirmation Card (§10B)) — Turn 14: ui.type: expected 'confirmation_card', got 'text_question'
+  ✗ Scenario 32 (Multiple SRs in the Same Session (§15)) — Turn 9: workflow_stage: expected 'CREATE_SR', got 'SR_CREATED'
+
+  ⚠ SLOW TURNS (>15s threshold):
+    S8 Turn 1 — Bot greets and asks what the user wants to do: 18171ms
+    S8 Turn 8 — End date accepted: 16636ms
+    S16 Turn 1 — All fields extracted in one message; confirmation card shown: 18483ms
+    S24 Turn 5 — SR submitted successfully: 16981ms
+    S29 Turn 1 — All fields extracted; start > end detected; bot must block and ask for corrected dates: 18195ms
+    S32 Turn 2 — Under Armour Jawharat Jeddah resolved: 16850ms
+    S32 Turn 4 — Start date accepted: 16599ms
+════════════════════════════════════════════════════════════════════════
+
+

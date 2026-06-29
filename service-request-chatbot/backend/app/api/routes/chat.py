@@ -35,6 +35,7 @@ from app.services.chat_orchestration_service import (
     user_id_to_uuid,
 )
 from app.types.chat import AuthContext
+from fastapi import Depends
 
 log = structlog.get_logger(__name__)
 
@@ -55,26 +56,25 @@ service_request_router = APIRouter()
 
 
 class ServiceRequestChatRequest(BaseModel):
-    """Incoming chat turn for the service-request workflow.
-
-    ``user_id`` is accepted in the request body for the POC.  In production
-    it will be derived from the verified JWT (``AuthContext.subject_id``).
-    """
+    """Incoming chat turn for the service-request workflow."""
 
     session_id: str | None = Field(
         default=None,
-        description="Existing session UUID.  Omit (or send null) to start a new conversation.",
+        description="Existing session UUID. Omit (or send null) to start a new conversation.",
         examples=["550e8400-e29b-41d4-a716-446655440000"],
     )
     user_id: str = Field(
         min_length=1,
-        description="Caller's user identifier.  UUID strings are stored verbatim; "
-        "non-UUID strings are deterministically mapped to a UUID.",
+        description="Caller's user identifier (used when no JWT is present — POC fallback).",
         examples=["user_456", "550e8400-e29b-41d4-a716-446655440001"],
     )
     message: str = Field(
-        min_length=1,
-        description="The user's natural-language message.",
+        default="",
+        description=(
+            "The user's natural-language message. "
+            "May be empty only when sr_id is provided (FM/DD opening an existing SR). "
+            "Must have at least 1 character when sr_id is absent."
+        ),
         examples=["I want to raise a handover request for Under Armour in Jawharat Jeddah"],
     )
     attachments: list[dict[str, Any]] = Field(
@@ -85,21 +85,26 @@ class ServiceRequestChatRequest(BaseModel):
         default=None,
         description=(
             "Explicit UI action that bypasses text-based intent parsing. "
-            "'confirm' triggers immediate SR submission; 'cancel' resets the confirmation. "
-            "When omitted the user's message text is parsed as usual."
+            "'confirm' triggers immediate SR submission; 'cancel' resets the confirmation."
         ),
         examples=["confirm", "cancel"],
     )
     selected_lease_id: str | None = Field(
         default=None,
-        description="Lease ID chosen from a lease_selection card.  "
-        "When set the graph skips re-resolving the lease via text.",
+        description="Lease ID chosen from a lease_selection card.",
         examples=["t0105712"],
     )
     corrected_fields: dict[str, Any] | None = Field(
         default=None,
-        description="Inline field edits submitted from the confirmation card.  "
-        "Values are merged into collected_data before validation.",
+        description="Inline field edits submitted from the confirmation card.",
+    )
+    sr_id: str | None = Field(
+        default=None,
+        description=(
+            "Platform SR ID — passed by the frontend when FM Manager or DD Engineer opens "
+            "an existing SR from a notification or SR list. Triggers sr_status_sync."
+        ),
+        examples=["SR-2026-00741"],
     )
 
 
@@ -164,15 +169,31 @@ class ServiceRequestChatResponse(BaseModel):
 async def post_service_request_chat(
     body: ServiceRequestChatRequest,
     db: DbSession,
+    auth: AuthContext = Depends(get_auth_context),
 ) -> ServiceRequestChatResponse:
     """Process one chat turn for the service-request workflow."""
+    # Validate: empty message is only allowed when sr_id is present (FM/DD opening existing SR)
+    if not body.message and not body.sr_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Either 'message' or 'sr_id' must be provided.",
+        )
+
+    # Resolve user_id: JWT subject_id takes precedence over request body user_id
+    effective_user_id: str = (
+        auth.subject_id
+        if auth.subject_id not in ("anonymous", "unauthenticated")
+        else body.user_id
+    )
+
     bound_log = log.bind(
-        user_id=body.user_id,
+        user_id=effective_user_id,
         raw_session_id=body.session_id,
+        role=next(iter(auth.roles), "none"),
     )
     bound_log.info("api.chat.service_request.received")
 
-    user_uuid: UUID = user_id_to_uuid(body.user_id)
+    user_uuid: UUID = user_id_to_uuid(effective_user_id)
     session_uuid: UUID | None = parse_session_id(body.session_id)
 
     service = ChatOrchestrationService(db)
@@ -186,6 +207,8 @@ async def post_service_request_chat(
             action=body.action,
             selected_lease_id=body.selected_lease_id,
             corrected_fields=body.corrected_fields,
+            auth_context=auth,
+            sr_id=body.sr_id,
         )
     except Exception as exc:
         bound_log.exception("api.chat.service_request.unhandled_error", error=str(exc))

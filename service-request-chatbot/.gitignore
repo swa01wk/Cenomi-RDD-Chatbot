@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 .venv/
+.venv_old/
 venv/
 __pycache__/
 *.py[cod]
@@ -32,3 +33,7 @@ htmlcov/
 
 # Logs
 *.log
+
+# Eval intermediate outputs (regenerated each run — keep only the final report)
+results/trace_eval_*.json
+results/manual_block_sessions.json

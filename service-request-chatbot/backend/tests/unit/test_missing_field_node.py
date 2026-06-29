@@ -337,3 +337,103 @@ class TestWorkflowStageRouting:
         asked = result["response_ui"]["field"] if result["status"] == "WAITING_FOR_USER" else None
         if asked is not None:
             assert asked in rdd_user_fields
+
+
+# ---------------------------------------------------------------------------
+# WorkflowConfig integration — config-aware question lookup (new tests)
+# ---------------------------------------------------------------------------
+
+
+class TestMissingFieldNodeWorkflowConfig:
+    """Verify missing_field_node uses per-workflow config when present."""
+
+    @pytest.mark.asyncio
+    async def test_uses_workflow_field_questions_when_config_present(self) -> None:
+        """When WorkflowConfig is registered, its field_questions are used."""
+        from app.agents.registries.workflow_config import (
+            WorkflowConfig, register_workflow, WORKFLOW_CONFIG_REGISTRY
+        )
+
+        custom_questions = {"lease_code": "CUSTOM: What is your lease code?"}
+        mock_cfg = WorkflowConfig(
+            agent_name="test_questions_agent",
+            extraction_prompt="prompt",
+            field_questions=custom_questions,
+            stage_sync_nodes={},
+            collection_stages=frozenset({"CREATE_SR"}),
+            confirmation_nodes={"CREATE_SR": "confirmation"},
+            terminal_stages=frozenset(),
+            # Include backend fields so tenant_profile_id etc. go to backend_missing,
+            # triggering the lease_code trigger question (from custom_questions).
+            backend_fields=frozenset({
+                "tenant_profile_id", "property_id", "brand_id", "lease_id",
+                "contract_id", "unit_codes", "city", "contracted_area", "lease_brand_mall",
+            }),
+            auto_generated_fields=frozenset({"title"}),
+            lease_trigger_fields=("lease_code",),
+            action_intents=frozenset(),
+        )
+        try:
+            register_workflow(mock_cfg)
+            state = _state(
+                active_agent="test_questions_agent",
+                workflow_stage="CREATE_SR",
+                collected_data={},  # All fields missing → lease trigger fires
+            )
+            result = await missing_field_node(state)
+            # Backend fields are missing → lease_code trigger fires
+            # → custom_questions["lease_code"] = "CUSTOM: ..." is used
+            assert result.get("status") == "WAITING_FOR_USER"
+            assert "CUSTOM" in result.get("response_message", ""), (
+                f"Expected CUSTOM question, got: {result.get('response_message')!r}"
+            )
+        finally:
+            WORKFLOW_CONFIG_REGISTRY.pop("test_questions_agent", None)
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_handover_questions_when_no_active_agent(self) -> None:
+        """active_agent=None → HANDOVER_FIELD_QUESTIONS used without error."""
+        state = _state(
+            active_agent=None,
+            workflow_stage="CREATE_SR",
+            collected_data={},
+        )
+        # Should not raise even with no active_agent
+        result = await missing_field_node(state)
+        assert "status" in result
+
+    @pytest.mark.asyncio
+    async def test_backend_fields_from_config_exclude_correct_fields(self) -> None:
+        """auto_generated_fields from WorkflowConfig are excluded from user_missing."""
+        from app.agents.registries.workflow_config import (
+            WorkflowConfig, register_workflow, WORKFLOW_CONFIG_REGISTRY
+        )
+
+        mock_cfg = WorkflowConfig(
+            agent_name="test_auto_gen_agent",
+            extraction_prompt="prompt",
+            field_questions={"permit_field": "What is the permit field?"},
+            stage_sync_nodes={},
+            collection_stages=frozenset({"CREATE_SR"}),
+            confirmation_nodes={"CREATE_SR": "confirmation"},
+            terminal_stages=frozenset(),
+            backend_fields=frozenset(),
+            auto_generated_fields=frozenset({"permit_number", "title"}),
+            lease_trigger_fields=(),
+            action_intents=frozenset(),
+        )
+        try:
+            register_workflow(mock_cfg)
+            # Use CREATE_SR which has "title" in required_fields
+            # With this config, "title" should be in auto_generated → not prompted
+            state = _state(
+                active_agent="test_auto_gen_agent",
+                workflow_stage="CREATE_SR",
+                collected_data={"lease_code": "LC-001", "lease_id": "LEASE-001"},
+            )
+            result = await missing_field_node(state)
+            # title should not be prompted (auto_generated)
+            asked_field = (result.get("response_ui") or {}).get("field")
+            assert asked_field != "title", "auto_generated field 'title' should not be asked"
+        finally:
+            WORKFLOW_CONFIG_REGISTRY.pop("test_auto_gen_agent", None)

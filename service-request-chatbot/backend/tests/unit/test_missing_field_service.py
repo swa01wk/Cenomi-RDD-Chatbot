@@ -76,9 +76,11 @@ class TestGetMissingFields:
         assert set(result) == {"title", "description", "startDate"}
 
     def test_subset_missing(self) -> None:
+        # description="" means user said "no description" (valid for optional fields)
+        # Only startDate=None is truly missing
         data = {"title": "SR", "description": "", "startDate": None}
         result = get_missing_fields(data, ["title", "description", "startDate"])
-        assert set(result) == {"description", "startDate"}
+        assert set(result) == {"startDate"}
 
     def test_all_present_returns_empty(self) -> None:
         data = {"title": "SR", "startDate": "2025-01-01", "endDate": "2025-01-31"}
@@ -112,14 +114,14 @@ class TestHandoverFieldQuestions:
     _EXPECTED_FIELDS = {
         "lease_code",
         "lease_brand_mall",
-        "title",
+        "title",        # user can provide; if absent, auto-generated
         "description",
         "startDate",
         "endDate",
         "inspection_done_by",
         "comments",
         "unit_readiness_date",
-        "expected_handover_date",
+        # expected_handover_date is auto-computed; removed from questions
         "guideLineLink",
         "actual_handover_date",
         "fitout_start_date",
