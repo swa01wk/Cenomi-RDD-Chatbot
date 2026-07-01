@@ -77,11 +77,13 @@ The frontend is a **generic conversational shell**. It does not know which backe
 
 ```mermaid
 graph TD
-    Root["app/page.tsx<br/>(redirects → /service-request-chat)"]
+    Root["app/page.tsx<br/>(redirects → /login or /service-request-chat)"]
+    Login["app/login/page.tsx<br/>(username + password → JWT)"]
     Chat["app/service-request-chat/page.tsx"]
     Admin["app/admin/agent-observability/page.tsx"]
 
-    Root --> Chat
+    Root --> Login
+    Login --> Chat
     Root --> Admin
 
     Chat --> SRC["ServiceRequestChat.tsx<br/>(generic chat orchestrator)"]
@@ -110,11 +112,13 @@ The frontend sends only the chat turn and UI interaction metadata. It **must not
 | Field | Direction | Notes |
 |---|---|---|
 | `session_id` | FE → BE | Identifies the conversation |
+| `user_id` | FE → BE | Caller's user identifier (POC fallback when no JWT; JWT sub takes precedence) |
 | `message` | FE → BE | Raw user text |
-| `attachment_ids` | FE → BE | Uploaded file references |
-| `selected_lease_id` | FE → BE | User-selected lease from disambiguation UI |
+| `attachments` | FE → BE | List of file attachment metadata dicts |
+| `selected_lease_id` | FE → BE | User-selected lease from disambiguation card |
 | `corrected_fields` | FE → BE | Inline field edits from a confirmation card |
 | `action` | FE → BE | UI action: `"confirm"`, `"cancel"`, or omitted |
+| `sr_id` | FE → BE | Platform SR ID — triggers `sr_status_sync` for FM/DD opening existing SR |
 
 The following fields are **owned exclusively by the backend** and must never be sent from the frontend:
 
@@ -168,12 +172,15 @@ graph TD
 
 - `CORSMiddleware` from `settings.cors_origins_list`.
 - Route mounts:
-  - `GET {api_v1_prefix}/health`
-  - `POST /api/chat/service-request` (no v1 prefix)
-  - `POST /api/v1/chat/turn` (deprecated stub)
+  - `GET {api_v1_prefix}/health`, `GET {api_v1_prefix}/ready`
+  - `POST /api/auth/login`, `GET /api/auth/me`
+  - `POST /api/chat/service-request` (primary chat — no v1 prefix)
+  - `POST /api/v1/chat/turn` (deprecated backward-compat stub)
   - `POST /api/v1/upload`
-  - `GET /api/observability/...`
-  - `GET /api/v1/observability/metrics/...`
+  - `GET /api/observability/traces`, `GET /api/observability/traces/{id}`
+  - `GET /api/observability/sessions/{session_id}/replay`
+  - `POST /api/observability/feedback`
+  - `GET /api/v1/observability/metrics/summary`
 
 **`ChatOrchestrationService`** (`app/services/chat_orchestration_service.py`) is the central coordinator. It owns the full pipeline — from receiving the raw chat turn to returning a response — without delegating any routing decisions to the frontend:
 
@@ -207,7 +214,9 @@ graph TD
 
 ## LangGraph Architecture
 
-The graph is defined in `app/agents/graph/service_request_graph.py` and compiled once as a singleton (`get_compiled_graph()`).
+The main graph is defined in `app/agents/graph/helper_agent_graph.py` and compiled once as a singleton (`get_compiled_helper_graph()`). `service_request_graph.py` is a backward-compat re-export stub that delegates to the helper graph.
+
+The helper graph adds a **FAQ path** (ASK_HELP / UNKNOWN intent → `faq_node` → `response_generation`) and **RBAC enforcement** in `supervisor_node` on top of the core SR workflow nodes.
 
 ```mermaid
 flowchart TD
@@ -396,6 +405,7 @@ erDiagram
 
 - `001_initial_schema.py` — domain tables: `chat_sessions`, `chat_messages`, `service_request_drafts`, `service_request_chat_audit_logs`, and legacy observability stubs.
 - `002_agent_observability.py` — agent observability tables: `agent_traces`, `agent_runs`, `agent_state_snapshots`, `agent_state_diffs`, `agent_llm_calls`, `agent_tool_calls`, `agent_feedback`.
+- `003_users.py` — `users` table for JWT-based local auth: `username`, `email`, `password_hash` (bcrypt), `role`, `unique_property_ids`, `mall_names`, `is_global_admin`, `is_active`.
 
 **ORM:** Async SQLAlchemy with asyncpg driver (`DATABASE_URL` must use `postgresql+asyncpg://...`).
 
@@ -412,20 +422,26 @@ graph LR
     end
 
     subgraph Backend Services
+        AUTH_CLIENT["ServiceRequestPlatformClient<br/>(S2S auth, 401 reactive refresh)"]
         LL["LeaseLookupService<br/>(lease_lookup_node)"]
         SRA["ServiceRequestAPIService<br/>(api_submission_node)"]
-        FU["UploadRoute<br/>(stub)"]
+        FU["DocumentUploadService<br/>(upload route)"]
     end
 
-    LL -->|GET tenant leases by user_id| LEASE
-    SRA -->|POST create service request| SR_API
-    FU -->|POST upload binary| FILE
+    AUTH_CLIENT -->|POST /cenomi-ai/login| SR_API
+    LL -->|GET /leases?lease_code=...| LEASE
+    SRA -->|POST/PATCH /service-requests| SR_API
+    FU -->|PUT /files| SR_API
 ```
 
-**Lease lookup:** Called when `selected_lease` is set or `lease_id` is missing from `collected_data`. Resolves from the Cenomi Lease-Tenant API, handles multi-lease disambiguation by surfacing a `LeaseSelectionUI` component to the user.
+**Lease lookup:** `HttpLeaseLookupService` calls `GET {LEASE_TENANT_API_BASE_URL}/leases` with `lease_code`, `brand`, `mall`, and optional `property_ids` (from JWT `unique_property_ids`) as query params. Handles 0-match (ask user), 1-match (auto-enrich), N-match (lease selection card). Enriches `collected_data` with all backend-derived fields including `lease` display label.
 
-**Service Request submission:** `ServiceRequestAPIService.create_service_request` posts the payload built by `PayloadBuilderService.build_create_handover_payload`. On success, sets `workflow_stage = "SR_CREATED"` and `status = SUBMITTED`.
+**Service Request submission:** `HttpServiceRequestAPIService.create_service_request` delegates to `ServiceRequestPlatformClient` which first calls `ensure_authenticated()` (TTL-based + 401 reactive re-auth). The payload is built by `build_create_handover_payload()` and verified against the Postman collection shape.
 
-**File Upload:** Route stub at `POST /api/v1/upload`. Enforces MIME allowlist (PDF/JPEG/PNG) and `PermissionService.ensure_can_create_request`. Does not yet persist bytes.
+**File Upload:** `POST /api/v1/upload` → `DocumentUploadService.upload_document()` → `ServiceRequestPlatformClient.upload_file()` → `PUT {SERVICE_REQUEST_API_BASE_URL}/files`. Returns real `document_id`, `file_path`, `signed_url` from platform. MIME allowlist (PDF/JPEG/PNG) and document-type RBAC enforced before upload.
 
-**Authentication:** `HTTPBearer` optional header. Default `AuthContext` is `"anonymous"` with empty roles. `PermissionService` (`app/agents/services/permission_service.py`) maps actions to required permission strings; unknown actions **fail-closed** — an unrecognised action raises `PermissionDeniedError` immediately.
+**Authentication (user-facing):** `POST /api/auth/login` issues HS256 JWT after bcrypt password verification. JWT payload contains `roles`, `unique_property_ids`, `mall_names`, `is_global_admin`. `get_auth_context()` in `core/security.py` decodes and validates the Bearer token. `RBAC_ENFORCE=false` (default) runs in shadow mode — unauthenticated requests pass through as anonymous. Set `RBAC_ENFORCE=true` to enforce.
+
+**Authentication (platform S2S):** `ServiceRequestPlatformClient` logs into the Cenomi platform via `POST /cenomi-ai/login` using `PLATFORM_INTERNAL_API_TOKEN` + `PLATFORM_LOGIN_EMAIL`. Token is cached for 1 hour (TTL) and refreshed reactively on 401 responses.
+
+**Config** (`app/core/config.py`): Key env vars — `DATABASE_URL`, `REDIS_URL`, `SERVICE_REQUEST_API_BASE_URL`, `LEASE_TENANT_API_BASE_URL`, `PLATFORM_AUTH_BASE_URL`, `PLATFORM_INTERNAL_API_TOKEN`, `PLATFORM_LOGIN_EMAIL`, `JWT_SECRET_KEY`, `RBAC_ENFORCE`, `OPENAI_API_KEY`, `LLM_MODEL`, `LLM_CONFIDENCE_THRESHOLD`. Leave the platform URLs empty to run in mock mode (in-memory lease data + fake SR IDs).

@@ -75,6 +75,8 @@ TONE AND STYLE RULES
   Always use their plain English equivalents from the context you are given.
 - Never reveal workflow internals (node names, stages, status codes).
 - If the user is confirming or cancelling, acknowledge their choice warmly.
+- If the message to communicate contains ``[Source: ...]`` citation markers, preserve them
+  verbatim at the end of your reply — do not remove or paraphrase them.
 
 ════════════════════════════════════════════════════════
 OUTPUT FORMAT — STRICT

@@ -42,6 +42,10 @@ async def load_session_node(state: ServiceRequestState) -> dict[str, Any]:
         # an LLM hint) and ``response_generation`` (which includes it in the LLM
         # context).  Reset it here so every turn starts with an empty list.
         loaded.pop("missing_fields", None)
+        # ``faq_sources`` are per-turn RAG citations set by ``faq_node``.
+        # Resetting prevents stale citations from a FAQ turn leaking into a
+        # subsequent SR workflow turn's API response.
+        loaded.pop("faq_sources", None)
         return loaded
     except Exception:
         log.exception("load_session_node.failed", session_id=session_id)

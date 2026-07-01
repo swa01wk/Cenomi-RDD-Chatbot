@@ -77,12 +77,12 @@ graph TB
 
     subgraph HelperAgentLayer["Helper Agent (Python FastAPI + LangGraph)"]
         AUTH["POST /api/auth/login\nbcrypt verify → issue HS256 JWT"]
-        CHATEP["POST /api/chat/turn\nJWT required"]
+        CHATEP["POST /api/chat/service-request\nJWT required"]
         UPLOAD["POST /api/v1/upload\nDocument upload"]
 
         ORCH["ChatOrchestrationService\nJWT → AuthContext\nInjection guard\nTrace lifecycle"]
 
-        subgraph GraphLayer["LangGraph (26 nodes)"]
+        subgraph GraphLayer["LangGraph (24 nodes)"]
             LS["load_session"]
             SV["supervisor\nLLM intent + RBAC"]
             FAQ["faq_node\nLLM + FAQ prompt"]
@@ -105,7 +105,7 @@ graph TB
         LEASEAPI["Lease-Tenant API\nGET /leases"]
     end
 
-    CHAT -->|"POST /api/chat/turn + JWT"| CHATEP
+    CHAT -->|"POST /api/chat/service-request + JWT"| CHATEP
     CHAT -->|"POST /api/auth/login"| AUTH
     CHATEP --> ORCH
     ORCH --> LS
@@ -137,7 +137,7 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant Trace as TraceManager
 
-    FE->>Orch: POST /api/chat/turn (JWT + message)
+    FE->>Orch: POST /api/chat/service-request (JWT + message)
     Orch->>Orch: JWT decode → AuthContext (roles, property_ids)
     Orch->>DB: Load or create ChatSession
     Orch->>Trace: start_trace() → AgentTrace RUNNING
@@ -205,7 +205,7 @@ sequenceDiagram
         UI->>UI: Redirect to /chat
     end
     User->>UI: Types message
-    UI->>API: POST /api/chat/turn Authorization: Bearer token
+    UI->>API: POST /api/chat/service-request Authorization: Bearer token
     API->>API: jwt.decode → AuthContext(roles, unique_property_ids, ...)
 ```
 
@@ -216,7 +216,7 @@ sequenceDiagram
   "sub": "uuid",
   "user_id": "uuid",
   "roles": ["MALL_MANAGER"],
-  "unique_property_ids": [7],
+  "unique_property_ids": [3041],
   "mall_names": ["Jawharat Jeddah"],
   "is_global_admin": false,
   "exp": 1751234567
@@ -245,9 +245,9 @@ CREATE TABLE users (
 
 | Username | Password | Role | Mall access |
 |---|---|---|---|
-| `aisha@cenomi.com` | `test1234` | MALL_MANAGER | Jawharat Jeddah (ID=7) |
-| `khalid@cenomi.com` | `test1234` | FM_MANAGER | Jawharat Jeddah (ID=7) |
-| `omar@cenomi.com` | `test1234` | OPERATIONS | Jawharat Jeddah (ID=7) |
+| `aisha@cenomi.com` | `test1234` | MALL_MANAGER | Jawharat Jeddah (ID=3041) |
+| `khalid@cenomi.com` | `test1234` | FM_MANAGER | Jawharat Jeddah (ID=3041) |
+| `omar@cenomi.com` | `test1234` | OPERATIONS | Jawharat Jeddah (ID=3041) |
 | `sara@cenomi.com` | `test1234` | DD_ENGINEER | None (global) |
 | `admin@cenomi.com` | `test1234` | ADMIN | All (global_admin=true) |
 
@@ -338,7 +338,7 @@ ROLE_PERMITTED_INTENTS = {
 
 ## 6. The Helper Agent Graph
 
-### Full graph (26 nodes)
+### Full graph (24 nodes)
 
 ```mermaid
 flowchart TD
@@ -1150,8 +1150,8 @@ flowchart TD
 
     L1["Layer 1: JWT Validation\ncore/security.py\nExtract roles, unique_property_ids\nShadow or enforce mode"]
     L2["Layer 2: Supervisor Intent Filter\nROLE_PERMITTED_INTENTS check\nFM Manager cannot CREATE_SR\n→ deny + explain"]
-    L3["Layer 3: Registry Stage Check\nrole_can_act_on_stage(role, stage)\nWrong role → deny"]
-    L4["Layer 4: Stage Entry Guard\nhandover_entry: MALL_MANAGER\nfm_review_entry: FM_MANAGER / OPERATIONS\nrdd_review_entry: DD_ENGINEER"]
+    L3["Layer 3: Validation Stage Check\nvalidate_permission(role, stage)\nin validation_node — wrong role → blocking error"]
+    L4["Layer 4: Stage Entry Guards\nfm_review_entry: FM_MANAGER / OPERATIONS\nrdd_review_entry: DD_ENGINEER\nhandover_entry: blocked at Layer 2"]
     L5["Layer 5: PermissionService.check()\nAction-level fail-closed\nUnknown action → PermissionDeniedError"]
     L6["Layer 6: Lease Scoping\nlease_lookup passes property_ids\nUser sees only their leases"]
     L7["Layer 7: Submission Hard Guard\nconfirmation_status == CONFIRMED\nno blocking errors\npayload present\nAll 3 must pass independently"]
@@ -1171,14 +1171,15 @@ Layer 2: Supervisor intent filter (supervisor_node.py)
     FM Manager asking to CREATE_SR → "Your role does not permit this action" + deny
     No SR workflow activated, no draft created
 
-Layer 3: Registry stage permission (registry_node.py)
-    role_can_act_on_stage(role, stage) check
+Layer 3: Validation-level stage permission (validation_service.py)
+    validate_permission(role, workflow_stage) called inside validation_node
     PERMISSION_MAP = {MALL_MANAGER: (CREATE_SR,), FM_MANAGER: (FM_REVIEW,), ...}
+    Blocking error if role is not authorised for the current stage
 
 Layer 4: Stage entry node guards
-    handover_entry: MALL_MANAGER
-    fm_review_entry: FM_MANAGER or OPERATIONS
+    fm_review_entry: FM_MANAGER or OPERATIONS (role guard on backend_refs.user_role)
     rdd_review_entry: DD_ENGINEER
+    handover_entry: no explicit role guard — CREATE_SR is blocked at Layer 2 (supervisor) for non-MALL_MANAGER roles
 
 Layer 5: PermissionService.check() (permission_service.py)
     Action-level, fail-closed
@@ -1345,7 +1346,7 @@ Response:
   "role": "MALL_MANAGER",
   "roles": ["MALL_MANAGER"],
   "mall_names": ["Jawharat Jeddah"],
-  "unique_property_ids": [7],
+  "unique_property_ids": [3041],
   "is_global_admin": false
 }
 ```
@@ -1477,7 +1478,7 @@ backend/
 │   │       └── upload.py                POST /api/v1/upload
 │   ├── agents/
 │   │   ├── graph/
-│   │   │   ├── helper_agent_graph.py    ← MAIN GRAPH (26 nodes, all routing)
+│   │   │   ├── helper_agent_graph.py    ← MAIN GRAPH (24 nodes, all routing)
 │   │   │   ├── service_request_graph.py ← Backward-compat stub → helper graph
 │   │   │   ├── state.py                 ServiceRequestGraphState TypedDict
 │   │   │   └── nodes/
@@ -1652,6 +1653,24 @@ When the `WorkflowConfig` is registered, these shared nodes automatically pick u
 
 ---
 
+## Appendix A — Eval Framework
+
+The `tests/eval/` directory contains a live HTTP evaluation suite that drives the running backend (not pytest — these are not unit tests).
+
+| Script | Purpose | Command |
+|--------|---------|---------|
+| `test_manual_blocks.py` | Runs all 12 manual test blocks from `manual-testing-script.md` against the live API. Authenticates as `aisha@cenomi.com`, one session per block, asserts ui type / workflow stage / keywords. Saves `results/manual_block_results.json`. | `PYTHONPATH=$(pwd) python tests/eval/test_manual_blocks.py --verbose` |
+| `run_eval.py` | Runs 33 predefined end-to-end scenarios from `scenarios.py`. Checks confirmation card, SR submission reference UUID, stage progression. | `PYTHONPATH=$(pwd) python tests/eval/run_eval.py --verbose` |
+| `eval_session.py` | Post-hoc trace scoring: fetches a session replay from the observability API and scores every turn against 7 criteria (STATUS, LATENCY, INTENT, STAGE, EXTRACTION, CONFIRMATION, SUBMISSION). | `PYTHONPATH=$(pwd) python tests/eval/eval_session.py --session-id <uuid>` |
+| `report_writer.py` | Compiles `manual_block_results.json` + trace eval JSONs + `run_eval_output.txt` into a detailed markdown report under `results/`. | `PYTHONPATH=$(pwd) python tests/eval/report_writer.py` |
+
+**Current baseline (post-P0 fix):**
+- Manual blocks: **12/12** passed (46/46 turns)
+- Automated scenarios: **31/33** passed (231/241 turns)
+- The 2 remaining failures are edge-case multi-session flows (non-blocking for current sprint)
+
+---
+
 ## Appendix A — LLM Call Budget
 
 | Turn type | Supervisor | Field extraction | Response gen | Total |
@@ -1707,7 +1726,12 @@ npm run dev   # http://localhost:3000
 # 6. Open http://localhost:3000/login
 # Use aisha@cenomi.com / test1234 (MALL_MANAGER)
 
-# 7. Run tests
+# 7. Run unit / integration / e2e tests
 cd backend
-pytest   # 1,143 passing
+pytest
+
+# 8. Run live eval suite (requires running backend)
+PYTHONPATH=$(pwd) python tests/eval/test_manual_blocks.py --verbose   # 12 manual blocks
+PYTHONPATH=$(pwd) python tests/eval/run_eval.py --verbose             # 33 automated scenarios
+PYTHONPATH=$(pwd) python tests/eval/report_writer.py                  # generate markdown report
 ```

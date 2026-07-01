@@ -6,21 +6,25 @@ The system implements multiple defence-in-depth layers to prevent unauthorized a
 
 ```mermaid
 flowchart TD
-    MSG["User Message"]
-    IG["1. Injection Guard<br/>injection_guard.scan_message()"]
-    AUTH["2. Permission Check<br/>PermissionService"]
+    MSG["User Message + JWT"]
+    JWT["0. JWT Validation\ncore/security.py\nExtract roles + property_ids"]
+    IG["1. Injection Guard\ninjection_guard.scan_message()"]
+    RBAC["2. Supervisor RBAC\nsupervisor_node — intents_for_roles()"]
     EXTRACT["LLM Field Extraction"]
-    MERGE["3. Backend Field Protection<br/>merge_state_node"]
-    VALID["4. Required Field Enforcement<br/>ValidationService"]
-    CONFIRM["5. Confirmation Enforcement<br/>handover_entry_node + api_submission_node"]
+    LEASE["3. Lease Scoping\nlease_lookup_node\nproperty_ids from JWT"]
+    MERGE["4. Backend Field Protection\nmerge_state_node"]
+    VALID["5. Required Field + Stage Permission\nValidationService"]
+    CONFIRM["6. Confirmation Enforcement\nhandover_entry_node + api_submission_node"]
     SUBMIT["Service Request API"]
 
-    MSG --> IG
-    IG -->|HIGH_RISK score ≥ 0.7| BLOCK["Refusal + fail_trace<br/>audit: security.injection_attempt"]
-    IG -->|clean| AUTH
-    AUTH -->|unauthorized| DENY["Permission denied"]
-    AUTH -->|authorized| EXTRACT
-    EXTRACT --> MERGE
+    MSG --> JWT
+    JWT -->|shadow mode pass / enforce mode 401| IG
+    IG -->|HIGH_RISK score ≥ 0.7| BLOCK["Refusal + fail_trace"]
+    IG -->|clean| RBAC
+    RBAC -->|intent not permitted for role| DENY["Role denial message\nno SR draft created"]
+    RBAC -->|intent permitted| EXTRACT
+    EXTRACT --> LEASE
+    LEASE --> MERGE
     MERGE --> VALID
     VALID -->|blocking errors| QUESTION["Ask user to correct"]
     VALID -->|all valid| CONFIRM
@@ -181,7 +185,7 @@ HIGH_RISK_THRESHOLD = 0.7
 
 **Module:** `app/core/security.py` and `app/agents/services/permission_service.py`
 
-**Authentication:** `HTTPBearer` optional dependency. If no bearer token is provided, `AuthContext` defaults to `"anonymous"` with empty roles.
+**Authentication (user-facing):** `HTTPBearer` optional dependency. `core/security.py` decodes and validates the HS256 JWT from the `Authorization: Bearer` header. The JWT payload carries `roles`, `unique_property_ids`, `mall_names`, `is_global_admin`. If no bearer token is provided and `RBAC_ENFORCE=false` (default / shadow mode), `AuthContext` defaults to anonymous with empty roles. Set `RBAC_ENFORCE=true` to enforce JWT presence (returns HTTP 401 on missing token).
 
 **Action → permission mapping** (`ACTION_PERMISSION_MAP` in `PermissionService`):
 
@@ -210,7 +214,11 @@ HIGH_RISK_THRESHOLD = 0.7
 - `upload.py` route: `PermissionService.ensure_can_create_request` before processing file uploads.
 - FM/RDD entry nodes: role checks before FM/RDD actions are dispatched.
 
-> **POC note:** `AuthContext.roles` is currently populated from a stub `get_auth_context` in `core/security.py`. When real JWT validation is wired, roles will come from token claims and `PermissionService` will enforce them automatically.
+**Supervisor RBAC layer (Layer 2):** `supervisor_node` calls `intents_for_roles(auth.roles, auth.is_global_admin)` after LLM intent classification. If the classified intent is not in the user's permitted set, the node returns `{"status": "WAITING_FOR_USER", "response_message": "Your role (X) does not permit this action..."}`. The routing function reads the `WAITING_FOR_USER` status and routes to `response_generation`. This state mutation happens inside the node (not the routing function) so LangGraph propagates it correctly.
+
+**Lease scoping (Layer 6):** `lease_lookup_node` extracts `unique_property_ids` from `auth_context` and passes them to `LeaseLookupQuery.property_ids`. `HttpLeaseLookupService` forwards them as query params to the Lease API so the user only sees leases from their authorised properties.
+
+**Platform service-to-service auth:** `ServiceRequestPlatformClient` uses a separate credential set (`PLATFORM_INTERNAL_API_TOKEN` + `PLATFORM_LOGIN_EMAIL`) to log in to the Cenomi platform via `POST /cenomi-ai/login`. The resulting Bearer token is cached with a 1-hour TTL and refreshed reactively on 401 responses. This is independent of the user-facing JWT system.
 
 ---
 

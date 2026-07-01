@@ -70,11 +70,16 @@ cp .env.example .env
 | `CORS_ORIGINS` | `http://localhost:3000` | No | Comma-separated allowed origins |
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/service_request_chatbot` | **Yes** | Must use `postgresql+asyncpg://` driver prefix |
 | `REDIS_URL` | `redis://localhost:6379/0` | No | Redis connection URL |
-| `SERVICE_REQUEST_API_BASE_URL` | *(empty)* | **Yes (prod)** | Cenomi SR API base URL |
-| `LEASE_TENANT_API_BASE_URL` | *(empty)* | **Yes (prod)** | Cenomi Lease-Tenant API base URL |
-| `FILE_UPLOAD_API_BASE_URL` | *(empty)* | **Yes (prod)** | Cenomi file upload API base URL |
+| `SERVICE_REQUEST_API_BASE_URL` | *(empty)* | **Yes (prod)** | Cenomi SR API — leave empty for mock mode |
+| `LEASE_TENANT_API_BASE_URL` | *(empty)* | **Yes (prod)** | Cenomi Lease-Tenant API — leave empty for mock mode |
+| `FILE_UPLOAD_API_BASE_URL` | *(empty)* | No | Reserved — uploads use `SERVICE_REQUEST_API_BASE_URL + /files` |
+| `PLATFORM_AUTH_BASE_URL` | *(empty)* | No | Platform auth endpoint — defaults to `SERVICE_REQUEST_API_BASE_URL` |
+| `PLATFORM_INTERNAL_API_TOKEN` | *(empty)* | **Yes (prod)** | `x-internal-api-token` for service-to-service platform login |
+| `PLATFORM_LOGIN_EMAIL` | *(empty)* | **Yes (prod)** | Email for service-to-service platform login |
 | `JWT_SECRET_KEY` | `change-me-in-production` | **Yes (prod)** | JWT signing key |
 | `JWT_ALGORITHM` | `HS256` | No | JWT algorithm |
+| `JWT_EXPIRE_MINUTES` | `60` | No | JWT token expiry in minutes |
+| `RBAC_ENFORCE` | `false` | No | `false` = shadow mode (warn + pass); `true` = reject unauthenticated requests |
 | `OPENAI_API_KEY` | *(empty)* | **Yes** | OpenAI API key for LLM calls |
 | `LLM_MODEL` | `gpt-4o-mini` | No | Model name |
 | `LLM_BASE_URL` | *(empty)* | No | Custom LLM base URL (Azure OpenAI, proxy, etc.) |
@@ -112,6 +117,17 @@ source .venv/bin/activate          # macOS/Linux
 pip install --upgrade pip
 pip install -e ".[dev]"
 
+# Apply migrations (first time or after schema changes)
+alembic upgrade head
+
+# Seed test users (first time only)
+python scripts/seed_users.py
+# Creates: aisha@cenomi.com / test1234 (MALL_MANAGER)
+#          khalid@cenomi.com / test1234 (FM_MANAGER)
+#          omar@cenomi.com   / test1234 (OPERATIONS)
+#          sara@cenomi.com   / test1234 (DD_ENGINEER)
+#          admin@cenomi.com  / test1234 (ADMIN)
+
 # Start development server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -138,6 +154,7 @@ npm run dev
 
 Available once running:
 
+- Login: http://localhost:3000/login (`aisha@cenomi.com` / `test1234`)
 - Chat UI: http://localhost:3000/service-request-chat
 - Admin observability: http://localhost:3000/admin/agent-observability
 
@@ -167,6 +184,7 @@ alembic history --verbose
 |----------|------|----------------|
 | `001` | `alembic/versions/001_initial_schema.py` | `chat_sessions`, `chat_messages`, `service_request_drafts`, `service_request_chat_audit_logs`, legacy observability stubs |
 | `002` | `alembic/versions/002_agent_observability.py` | `agent_traces`, `agent_runs`, `agent_state_snapshots`, `agent_state_diffs`, `agent_llm_calls`, `agent_tool_calls`, `agent_feedback` |
+| `003` | `alembic/versions/003_users.py` | `users` table — `username`, `email`, `password_hash`, `role`, `unique_property_ids`, `mall_names`, `is_global_admin`, `is_active` |
 
 **Create a new migration** (after changing `app/db/models.py`):
 
@@ -207,6 +225,34 @@ pytest -x
 ```
 
 **E2E tests require no running server** — they use `httpx.AsyncClient` with `ASGITransport` directly against the FastAPI app. No Docker / Postgres required for E2E tests (DB is mocked).
+
+---
+
+## Running Eval Suite (Live)
+
+The `tests/eval/` scripts drive a **running backend** over HTTP. They are not pytest — run them directly:
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# Make sure the backend is running on port 8000 first
+
+# Run all 12 manual test blocks (authenticates as aisha@cenomi.com)
+PYTHONPATH=$(pwd) python tests/eval/test_manual_blocks.py --verbose
+
+# Run 33 automated scenarios
+PYTHONPATH=$(pwd) python tests/eval/run_eval.py --verbose
+
+# Score a specific session from the observability replay
+PYTHONPATH=$(pwd) python tests/eval/eval_session.py --session-id <uuid>
+
+# Compile all results into a markdown report
+PYTHONPATH=$(pwd) python tests/eval/report_writer.py
+# → results/manual-test-eval-report-YYYY-MM-DD.md
+```
+
+> **Note:** Use `PYTHONPATH=$(pwd)` when running scripts from `backend/` — the `tests` package import requires the backend root to be on the path.
 
 ---
 
@@ -264,5 +310,7 @@ No application `Dockerfile` is included — the backend is run with `uvicorn` an
 | `ModuleNotFoundError: app` | Virtual environment not activated | `source .venv/bin/activate` |
 | Frontend calls fail with 404 | `NEXT_PUBLIC_API_V1_PREFIX=/api/v1` | Set it to `""` in `.env.local` |
 | Alembic `can't locate revision` | Migrations not applied | `alembic upgrade head` |
+| Login returns 401 `Incorrect username or password` | Users not seeded | `python scripts/seed_users.py` |
 | `OPENAI_API_KEY` missing error | LLM calls fail without key | Set `OPENAI_API_KEY=sk-...` in `backend/.env` |
 | Redis connection refused | Redis not started | `docker compose up -d redis` |
+| Eval scripts fail with `ModuleNotFoundError: tests` | PYTHONPATH not set | Prefix with `PYTHONPATH=$(pwd)` when running from `backend/` |

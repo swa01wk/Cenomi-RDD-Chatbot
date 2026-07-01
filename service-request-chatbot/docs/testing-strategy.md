@@ -2,13 +2,14 @@
 
 ## Overview
 
-Tests live under `backend/tests/` and are split into three layers:
+Tests live under `backend/tests/` and are split into four layers:
 
 ```
 backend/tests/
-├── unit/          # Pure function and service tests (30+ files)
+├── unit/          # Pure function and service tests (41+ files)
 ├── integration/   # Compiled graph with mocked LLM/API/DB
-└── e2e/           # Full HTTP stack via ASGI transport
+├── e2e/           # Full HTTP stack via ASGI transport
+└── eval/          # Live HTTP eval suite (NOT pytest — requires running backend)
 ```
 
 Run all tests:
@@ -26,17 +27,19 @@ pytest tests/e2e/
 
 **Prerequisite:** The `users` table must exist for tests that exercise auth. Run `alembic upgrade head` once before tests, or ensure tests that test auth mock the `UserRepository`.
 
-**Node import paths changed:** Nodes are now grouped into subdirectories. Update imports in any new tests:
+**Node import paths:** Nodes are grouped into subdirectories. Canonical paths for new tests:
 
-| Old path | New path |
-|---|---|
-| `app.agents.graph.nodes.supervisor_node` | `app.agents.graph.nodes.shared.supervisor_node` |
-| `app.agents.graph.nodes.registry_node` | `app.agents.graph.nodes.shared.registry_node` |
-| `app.agents.graph.nodes.load_session_node` | `app.agents.graph.nodes.shared.load_session_node` |
-| `app.agents.graph.nodes.faq_node` | `app.agents.graph.nodes.faq.faq_node` |
-| `app.agents.graph.nodes.handover_entry_node` | `app.agents.graph.nodes.handover.handover_entry_node` |
-| `app.agents.graph.nodes.validation_node` | `app.agents.graph.nodes.handover.validation_node` |
-| `app.agents.registries.service_request_registry` | `app.agents.registry` |
+| Node | Canonical path | Notes |
+|------|----------------|-------|
+| `supervisor_node` | `app.agents.graph.nodes.supervisor_node` | Re-exported; stub at `nodes/shared/` also works |
+| `registry_node` | `app.agents.graph.nodes.shared.registry_node` | |
+| `load_session_node` | `app.agents.graph.nodes.shared.load_session_node` | |
+| `faq_node` | `app.agents.graph.nodes.faq.faq_node` | |
+| `handover_entry_node` | `app.agents.graph.nodes.handover.handover_entry_node` | |
+| `validation_node` | `app.agents.graph.nodes.handover.validation_node` | |
+| `lease_lookup_node` | `app.agents.graph.nodes.handover.lease_lookup_node` | |
+| `agent registry` | `app.agents.registry` | (was `service_request_registry`) |
+| `workflow_config` | `app.agents.registries.workflow_config` | |
 
 Backward-compat re-export stubs exist at all old paths — existing tests continue to work unchanged.
 
@@ -65,17 +68,22 @@ Backward-compat re-export stubs exist at all old paths — existing tests contin
 | `test_conversation_state_service.py` | `load` merging draft into state, `save_checkpoint` upsert logic |
 | `test_observability_*.py` | Repository methods, state diff, sanitization |
 
-### New unit tests to add for Helper Agent additions
+### Helper Agent unit test status
 
-| File to create | What to test |
-|---|---|
-| `test_auth.py` | `hash_password`, `verify_password`, `create_access_token`, `decode_access_token` — happy path + expired token |
-| `test_user_repo.py` | `get_by_username` — found, not found, inactive user |
-| `test_helper_schema.py` | `intents_for_roles`, `HelperIntent` as `str`, `ALL_INTENTS` derived from registry |
-| `test_faq_node.py` | LLM call dispatched, FAQ answer returned, fallback on JSON parse error |
-| `test_helper_agent_graph.py` | `_route_after_sync` data-driven, `_route_after_validation` data-driven, `_route_after_supervisor` RBAC + fallbacks, `_SR_ACTION_INTENTS` derived |
-| `test_workflow_config.py` | `WorkflowConfig` registry shape, `get_workflow_config()`, `register_workflow()`, second workflow independent |
-| `test_security_guardrails.py` (extend) | RBAC mismatch returns role-appropriate message, `auth_context` injected correctly |
+| File | Status | What it tests |
+|------|--------|--------------|
+| `test_helper_schema.py` | ✅ Exists | `intents_for_roles`, `ALL_INTENTS` from registry |
+| `test_helper_agent_graph.py` | ✅ Exists | `_route_after_*` routing predicates, RBAC, `_SR_ACTION_INTENTS` |
+| `test_workflow_config.py` | ✅ Exists | `WorkflowConfig` registry, `get_workflow_config()`, `register_workflow()` |
+| `test_helper_schema.py` | ✅ Exists | `intents_for_roles`, role-to-intent mapping |
+| `test_auth.py` | ❌ Missing | `hash_password`, `verify_password`, JWT issue + decode, expired token |
+| `test_user_repo.py` | ❌ Missing | `get_by_username` — found, not found, inactive user |
+
+**Tests still needed (for next sprint):**
+- Supervisor RBAC denial: verify `supervisor_node` returns `WAITING_FOR_USER` + denial message for denied intents
+- `lease` field populated: verify `_enrich_collected_data` sets `collected_data["lease"] = record.lease_code`
+- Property-scoped lease query: `LeaseLookupQuery.property_ids` forwarded to `HttpLeaseLookupService._build_params`
+- Platform 401 retry: `ServiceRequestPlatformClient._post` / `_patch` re-auths on 401
 
 ### DB mocking pattern
 
@@ -142,12 +150,12 @@ def mock_llm_gateway():
 
 @pytest.fixture
 def mock_auth_context_mall_manager():
-    """AuthContext for a MALL_MANAGER with mall 7 access."""
+    """AuthContext for a MALL_MANAGER with Jawharat Jeddah access (property_id 3041)."""
     from app.types.chat import AuthContext
     return AuthContext(
         subject_id="aisha-uuid",
         roles=frozenset({"MALL_MANAGER"}),
-        unique_property_ids=(7,),
+        unique_property_ids=(3041,),
         mall_names=("Jawharat Jeddah",),
         is_global_admin=False,
     )
@@ -404,20 +412,41 @@ markers = [
 
 ## Test Coverage Map — New Features
 
-| Feature | Unit | Integration | E2E |
-|---|---|---|---|
-| Login (`POST /api/auth/login`) | `test_auth.py` | `test_auth_endpoint.py` | `test_handover_sr_e2e.py` (login step) |
-| JWT validation + AuthContext | `test_auth.py` | — | — |
-| UserRepository | `test_user_repo.py` | — | — |
-| Helper schema / RBAC intents | `test_helper_schema.py` | `test_rbac_routing.py` | — |
-| FAQ node | `test_faq_node.py` | `test_faq_path.py` | — |
-| Helper agent graph routing | `test_helper_agent_graph.py` | `test_faq_path.py`, `test_rbac_routing.py` | — |
-| FM Review flow | `test_fm_nodes.py` (existing) | `test_fm_review_e2e.py` (existing) | `test_handover_sr_e2e.py` |
-| RDD Review flow | `test_rdd_nodes.py` (existing) | `test_rdd_review_e2e.py` (existing) | `test_handover_sr_e2e.py` |
-| `sr_id` in request → `sr_status_sync` | — | `test_sr_status_sync.py` | — |
-| Node reorganisation (backward compat) | All existing unit tests (stubs in place) | — | — |
-| **WorkflowConfig registry** | `test_workflow_config.py` | — | — |
-| **Multi-workflow routing** (`_route_after_sync`, `_route_after_validation`) | `test_helper_agent_graph.py` | — | — |
-| **Per-workflow extraction prompt** | `test_field_extraction.py::TestFieldExtractionWorkflowConfig` | — | — |
-| **Per-workflow field questions** | `test_missing_field_node.py::TestMissingFieldNodeWorkflowConfig` | — | — |
-| **`HelperIntent` as `str`** | `test_helper_schema.py` | — | — |
+| Feature | Unit | Integration | E2E | Eval |
+|---|---|---|---|---|
+| Login (`POST /api/auth/login`) | ❌ `test_auth.py` | — | `test_handover_sr_e2e.py` | ✅ |
+| JWT validation + AuthContext | ❌ `test_auth.py` | — | — | — |
+| UserRepository | ❌ `test_user_repo.py` | — | — | — |
+| Helper schema / RBAC intents | ✅ `test_helper_schema.py` | — | — | ✅ Block 12 |
+| FAQ node | — | — | — | ✅ Blocks 1–2 |
+| Helper agent graph routing | ✅ `test_helper_agent_graph.py` | — | — | ✅ All blocks |
+| FM Review flow | ✅ `test_fm_review_e2e.py` | — | — | Next sprint |
+| RDD Review flow | ✅ `test_rdd_review_e2e.py` | — | — | Next sprint |
+| `sr_id` in request → `sr_status_sync` | — | — | — | — |
+| **WorkflowConfig registry** | ✅ `test_workflow_config.py` | — | — | — |
+| **Lease `lease` field populated** | ❌ Missing | — | — | ✅ Blocks 3–5 |
+| **Property-scoped lease query** | ❌ Missing | — | — | ✅ (implicit) |
+| **Platform 401 retry** | ❌ Missing | — | — | — |
+| **Multi-workflow routing** | ✅ `test_helper_agent_graph.py` | — | — | — |
+| **`HelperIntent` as `str`** | ✅ `test_helper_schema.py` | — | — | — |
+
+---
+
+## Eval Layer (`tests/eval/`)
+
+The eval layer is a separate live HTTP test suite — **not pytest**. It requires a running backend on `localhost:8000` (or a configurable base URL) and an authenticated user.
+
+| Script | Run command | What it does |
+|--------|-------------|-------------|
+| `test_manual_blocks.py` | `PYTHONPATH=$(pwd) python tests/eval/test_manual_blocks.py --verbose` | 12 blocks from `manual-testing-script.md`. Authenticates as `aisha@cenomi.com`, sends turns, asserts `ui.type`, `workflow_stage`, keywords. Saves `results/manual_block_results.json`. |
+| `run_eval.py` | `PYTHONPATH=$(pwd) python tests/eval/run_eval.py --verbose` | 33 predefined scenarios from `scenarios.py`. End-to-end: lease resolution → field collection → confirmation card → SR submission. |
+| `eval_session.py` | `PYTHONPATH=$(pwd) python tests/eval/eval_session.py --session-id <uuid>` | Post-hoc trace scoring via observability replay API. Scores 7 criteria: STATUS, LATENCY, INTENT, STAGE, EXTRACTION, CONFIRMATION, SUBMISSION. |
+| `report_writer.py` | `PYTHONPATH=$(pwd) python tests/eval/report_writer.py` | Compiles `manual_block_results.json` + trace eval JSONs + `run_eval_output.txt` → `results/manual-test-eval-report-YYYY-MM-DD.md`. |
+
+**Current baseline:** 12/12 manual blocks pass, 31/33 automated scenarios pass.
+
+**To run selectively:**
+```bash
+PYTHONPATH=$(pwd) python tests/eval/run_eval.py --scenarios 1,2,3
+PYTHONPATH=$(pwd) python tests/eval/run_eval.py --tags happy-path,core
+```

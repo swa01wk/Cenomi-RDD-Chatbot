@@ -58,6 +58,11 @@ class ServiceRequestGraphState(TypedDict, total=False):
     response_message: str
     response_ui: dict[str, Any]
 
+    # ── FAQ RAG citations ─────────────────────────────────────────────────────
+    # Set by faq_node when RAG search succeeds; always a list (never None).
+    # Reset to [] at the start of each turn by load_session_node.
+    faq_sources: list[dict]   # [{source_type: str, title: str}, ...]
+
     # ── Overall turn status ───────────────────────────────────────────────────
     status: Literal[
         "IN_PROGRESS",

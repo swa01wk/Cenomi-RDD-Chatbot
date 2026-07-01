@@ -109,6 +109,64 @@ class Settings(BaseSettings):
         description="Minimum supervisor confidence before routing; below this asks clarification.",
     )
 
+    # ── RAG provider selection ────────────────────────────────────────────────
+    embedding_provider: str = Field(
+        default="openai",
+        validation_alias="EMBEDDING_PROVIDER",
+        description="Embedding backend: 'openai' (default) or 'azure_openai'.",
+    )
+    search_provider: str = Field(
+        default="azure_search",
+        validation_alias="SEARCH_PROVIDER",
+        description="Search backend: 'azure_search' (only current impl).",
+    )
+
+    # Embeddings — standard OpenAI (reuses existing openai_api_key)
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        validation_alias="EMBEDDING_MODEL",
+        description="Embedding model name (used by both OpenAI and Azure OpenAI providers).",
+    )
+    embedding_base_url: str | None = Field(
+        default=None,
+        validation_alias="EMBEDDING_BASE_URL",
+        description="Optional custom base URL for OpenAI-compatible embedding endpoint.",
+    )
+
+    # Embeddings — Azure OpenAI (only when EMBEDDING_PROVIDER=azure_openai)
+    azure_ai_endpoint: str | None = Field(
+        default=None,
+        validation_alias="AZURE_AI_ENDPOINT",
+        description="Azure OpenAI endpoint, e.g. https://<instance>.openai.azure.com",
+    )
+    azure_ai_api_key: str | None = Field(
+        default=None,
+        validation_alias="AZURE_AI_API_KEY",
+        description="Azure OpenAI API key (only when EMBEDDING_PROVIDER=azure_openai).",
+    )
+    azure_ai_api_version: str = Field(
+        default="2024-02-15-preview",
+        validation_alias="AZURE_AI_API_VERSION",
+        description="Azure OpenAI API version for embedding calls.",
+    )
+
+    # Search — Azure AI Search (only when SEARCH_PROVIDER=azure_search)
+    azure_search_endpoint: str | None = Field(
+        default=None,
+        validation_alias="AZURE_SEARCH_ENDPOINT",
+        description="Azure AI Search endpoint, e.g. https://<instance>.search.windows.net",
+    )
+    azure_search_api_key: str | None = Field(
+        default=None,
+        validation_alias="AZURE_SEARCH_API_KEY",
+        description="Azure AI Search admin/query key.",
+    )
+    azure_search_index_name: str | None = Field(
+        default=None,
+        validation_alias="AZURE_SEARCH_INDEX_NAME",
+        description="Azure AI Search index name (e.g. cenomi-help-index).",
+    )
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origins_list(self) -> list[str]:

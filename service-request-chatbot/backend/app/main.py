@@ -12,6 +12,7 @@ from app.api.routes.chat import router as chat_router
 from app.api.routes.chat import service_request_router
 from app.core.config import settings
 from app.core.logging import configure_logging
+from app.integrations.factory import close_integrations
 from app.observability.api import feedback as obs_feedback
 from app.observability.api import metrics as obs_metrics
 from app.observability.api import sessions as obs_sessions
@@ -23,6 +24,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     # DB/redis engines are created lazily via session helpers; add migrations/startup checks here later.
     yield
+    # Close any open RAG integration HTTP clients (httpx.AsyncClient in AzureSearchRepository).
+    await close_integrations()
 
 
 def create_app() -> FastAPI:

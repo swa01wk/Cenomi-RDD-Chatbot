@@ -53,15 +53,22 @@ graph TD
 |--------|------|-------------|
 | `id` | UUID | Primary key |
 | `session_id` | UUID FK | Links to `chat_sessions` |
-| `status` | string | `"RUNNING"` → `"COMPLETED"` or `"FAILED"` |
-| `metadata` | JSONB | Turn metadata (user_id, message preview, etc.) |
+| `status` | string | `"RUNNING"` → `"SUCCESS"` or `"FAILED"` |
+| `intent` | string | Classified intent for this turn |
+| `active_agent` | string | Active agent name |
+| `workflow_stage_before` / `workflow_stage_after` | string | Stage at start and end of turn |
+| `total_latency_ms` | integer | End-to-end turn latency |
+| `total_token_count` | integer | Sum of all LLM tokens in this trace |
+| `estimated_cost` | decimal | Approximate cost based on token counts |
+| `input_message` | text | Sanitised user input |
+| `output_message` | text | Assistant reply |
 | `started_at` | timestamp | `TraceManager.start_trace` call time |
-| `finished_at` | timestamp | `TraceManager.finish_trace` call time |
+| `completed_at` | timestamp | `TraceManager.finish_trace` call time |
 
 **Lifecycle:**
 
 1. `TraceManager.start_trace(session_id, metadata)` → inserts row with `status = "RUNNING"`.
-2. `TraceManager.finish_trace(trace_id, final_state)` → updates `status = "COMPLETED"`, captures `AFTER_TRACE` snapshot.
+2. `TraceManager.finish_trace(trace_id, final_state)` → updates `status = "SUCCESS"`, populates all summary fields.
 3. `TraceManager.fail_trace(trace_id, error)` → updates `status = "FAILED"` (called from injection guard path and on unhandled exceptions).
 
 > **Known behaviour:** `finish_trace` calls `capture_state_snapshot(..., run_id=None, snapshot_type="AFTER_TRACE")`. `capture_state_snapshot` returns early when `run_id` is `None`, so the after-trace snapshot is currently a no-op. The trace status is still updated correctly.
@@ -79,7 +86,7 @@ graph TD
 | `parent_run_id` | UUID FK nullable | Parent run (for nested LLM/tool runs) |
 | `name` | string | Node name (e.g. `"supervisor"`, `"field_extraction"`) |
 | `run_type` | string | `"SUPERVISOR"` \| `"AGENT"` \| `"LLM"` \| `"TOOL"` |
-| `status` | string | `"RUNNING"` → `"COMPLETED"` or `"FAILED"` |
+| `status` | string | `"RUNNING"` → `"SUCCESS"` or `"FAILED"` |
 | `output` | JSONB | The **partial state dict** returned by the node (not the full merged state) |
 | `latency_ms` | integer | Derived from monotonic timers in `TraceManager` |
 | `started_at` | timestamp | |
@@ -106,6 +113,8 @@ Captured by `TraceManager.capture_llm_call(run_id, request, response, latency_ms
 
 - `supervisor_node` — captures `SupervisorDecision` with reasoning stripped before storage.
 - `field_extraction_node` — captures `HandoverExtractedFields` output.
+- `faq_node` — captures FAQ LLM call (question → embedded knowledge answer).
+- `response_generation_node` — captures response LLM call.
 
 **Chain-of-thought stripping:** `sanitize_state_for_trace` removes keys matching CoT patterns (e.g. `reasoning`, `chain_of_thought`) before any state is persisted. LLM `response` captures the parsed structured output, not the raw model output.
 
@@ -127,7 +136,9 @@ Captured by `TraceManager.capture_tool_call(run_id, tool_name, input, output, la
 | `output` | JSONB | Redacted API response |
 | `latency_ms` | integer | External API round-trip time |
 
-**Called from:** `api_submission_node`. The `PAYLOAD_BUILDER_OUTPUT` state snapshot is also captured here (with redacted `create_payload`).
+**Called from:**
+- `api_submission_node` — SR creation POST. The `PAYLOAD_BUILDER_OUTPUT` state snapshot is also captured here (with redacted `create_payload`).
+- `lease_lookup_node` — lease API HTTP call. Captures request params, match count, latency.
 
 ---
 
@@ -217,8 +228,8 @@ The Admin UI is at `/admin/agent-observability` in the Next.js frontend.
 
 **API consumed:**
 
-- `GET /api/observability/traces` — paginated trace list (query params: `session_id`, `agent`, `status`, `limit`, `offset`)
-- `GET /api/observability/traces/{trace_id}` — trace detail with full run tree
-- `GET /api/v1/observability/metrics/summary` — aggregate metrics
-
-> **Mismatch note:** The frontend `listTraces` client may send `active_agent` as a query param, while the backend `GET /api/observability/traces` expects `agent`. Verify against `app/api/routes/traces.py` param names when building integrations.
+- `GET /api/observability/traces` — paginated trace list (params: `session_id`, `agent`, `status`, `intent`, `page`, `page_size`). Response: `{ items, total, page, page_size, has_next }`.
+- `GET /api/observability/traces/{trace_id}` — trace detail: flat `runs[]`, `state_snapshots[]`, `state_diffs[]`, `llm_calls[]`, `tool_calls[]`, `feedback[]` + `run_tree`.
+- `GET /api/observability/sessions/{session_id}/replay` — all traces for a session oldest-first, each fully enriched. Used by `eval_session.py` for post-hoc scoring.
+- `POST /api/observability/feedback` — submit user feedback on a trace turn.
+- `GET /api/v1/observability/metrics/summary` — aggregate metrics: `total_traces`, `success_rate`, `failed_traces`, `avg_latency_ms`, `total_tokens`, `total_cost`.

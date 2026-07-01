@@ -139,6 +139,14 @@ class ServiceRequestChatResponse(BaseModel):
             "card in sync even when `ui` is a plain message or confirmation type."
         ),
     )
+    faq_sources: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "RAG citations returned by the FAQ node.  "
+            "Each item has ``source_type`` and ``title`` keys.  "
+            "Empty list when RAG was unavailable or the turn was not a FAQ query."
+        ),
+    )
     state: ChatStatePayload
     trace_id: str | None = Field(
         default=None,
@@ -223,6 +231,7 @@ async def post_service_request_chat(
         message=result.message,
         ui=result.ui,
         draft_preview=result.draft_preview,
+        faq_sources=result.faq_sources,
         state=ChatStatePayload(
             intent=result.state.intent,
             workflow_stage=result.state.workflow_stage,

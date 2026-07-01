@@ -82,6 +82,7 @@ class ChatTurnResult:
     state: ChatTurnState
     trace_id: UUID | None
     draft_preview: dict[str, Any] | None = None
+    faq_sources: list[dict] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -309,6 +310,7 @@ class ChatOrchestrationService:
             )
 
         # 9. Persist assistant reply -------------------------------------------
+        faq_sources: list[dict] = result_state.get("faq_sources") or []
         assistant_msg_time = datetime.now(timezone.utc)
         await self._message_repo.create(
             session_id=session_uuid,
@@ -318,6 +320,7 @@ class ChatOrchestrationService:
                 "active_agent": active_agent,
                 "status": graph_status,
                 "trace_id": str(trace_id) if trace_id else None,
+                "faq_sources": faq_sources,
             },
             created_at=assistant_msg_time,
         )
@@ -349,6 +352,7 @@ class ChatOrchestrationService:
         # 12. Build and return result ------------------------------------------
         missing_fields: list[str] = result_state.get("missing_fields") or []
         ready_to_submit = graph_status in ("READY_TO_SUBMIT", "SUBMITTED")
+        # faq_sources already extracted in step 9 above
 
         # Build a preview snapshot from collected_data on every turn.
         # Sent alongside every response so the frontend keeps its SR preview card
@@ -382,6 +386,7 @@ class ChatOrchestrationService:
             ),
             trace_id=trace_id,
             draft_preview=draft_preview,
+            faq_sources=faq_sources,
         )
 
     # ------------------------------------------------------------------

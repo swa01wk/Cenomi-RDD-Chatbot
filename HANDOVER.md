@@ -653,70 +653,110 @@ This drives 9 scenarios from `docs/e2e-test-guide.md` against the real running b
 
 ## 13. Known Gaps & Issues
 
-These are documented in full in `gaps_and_pc/chatbot_postman_gap_implementation_plan.md`.
+> **Last updated: June 2026** — Items marked ✅ have been resolved. Open items are scoped to the next sprint.
 
-### Gap 1 — CREATE_SR payload must exactly match Postman
+### ✅ FIXED — P0: Lease resolution loop (was the primary blocker)
 
-The platform expects specific field names and structure. The current `build_create_handover_payload()` needs to be verified against the Postman collection. Key fields to verify:
+**Root cause:** `lease_lookup_node._enrich_collected_data` enriched `collected_data` with `lease_code`, `lease_id`, etc. but never set `collected_data["lease"]`. Because `lease` was in `required_fields` but not in `workflow_config.backend_fields`, `validation_node` treated it as a user-missing blocking error on every turn and `missing_field_node` looped forever asking "Could you confirm the lease?"
 
-- `inspectionDoneBy` AND `inspection_done_by` (both must be sent)
-- `startDateLT` / `endDateLT` (local display format derived from ISO dates)
-- `lease_brand_mall` (derived: `"{lease_code} - {brand} - {mall}"`)
-- `documents_ids: []` and `document_status_map: []` (empty arrays for create)
-- `user_action: null`
-- Top-level `status` must **NOT** be sent during initial create
+**Fix applied (June 2026):**
+- `lease_lookup_node.py`: `_enrich_collected_data` now sets `updated["lease"] = record.lease_code`
+- `workflow_config.py`: `"lease"` added to `backend_fields` frozenset — never re-prompted to user
 
-### Gap 2 — Backend-derived field enrichment
+**Result:** SR creation flow completes end-to-end. Manual eval: 12/12 blocks, 31/33 automated scenarios.
 
-When the user provides a lease code / brand / mall, the lease lookup must resolve all of:
-`tenant_profile_id`, `property_id`, `brand_id`, `lease_id`, `contract_id`, `mall`, `brand`, `city`, `unit_codes`, `contracted_area`, `company_name`, `tenant_contact`, `lease_brand_mall`
+---
 
-If the current lease endpoint does not return all of these, an enrichment call must be added.
+### ✅ FIXED — P1: RBAC denial message not propagated to user
 
-### Gap 3 — File upload not wired to platform
+**Root cause:** The RBAC check was inside `_route_after_supervisor` (a LangGraph routing function). Routing functions are read-only — state mutations inside them are not persisted. The denial message was silently dropped.
 
-`POST /api/v1/upload` validates MIME type but does not call the platform `PUT /files` endpoint. The full upload flow must be:
+**Fix applied (June 2026):**
+- RBAC check moved into `supervisor_node.py` — returns `{"status": "WAITING_FOR_USER", "response_message": "Your role..."}` when intent is denied
+- `helper_agent_graph.py`: routing function is now side-effect-free; reads `status == "WAITING_FOR_USER"` only
 
-```
-Frontend → POST /api/v1/upload
-Backend → validate MIME + document type
-Backend → call platform PUT /files?query=SERVICE_REQUEST&...
-Platform → returns document_id
-Backend → store document metadata in draft
-```
+---
 
-### Gap 4 — FM_REVIEW not end-to-end
+### ✅ FIXED — Gap 1: CREATE_SR payload alignment
 
-The graph nodes exist but the following need verification/completion:
+`build_create_handover_payload()` verified against Postman collection. All fields present and correct:
+`inspectionDoneBy` + `inspection_done_by`, `startDateLT` / `endDateLT`, `lease_brand_mall`, `documents_ids: []`, `document_status_map: []`, `user_action: null`. Top-level `status` not sent on create. Confirmed via Postman collection cross-check.
+
+---
+
+### ✅ FIXED — Gap 2: Backend-derived field enrichment
+
+`lease_lookup_node` now enriches all required fields: `tenant_profile_id`, `property_id`, `brand_id`, `lease_id`, `contract_id`, `mall`, `brand`, `city`, `unit_codes`, `contracted_area`, `lease_brand_mall`, **and** `lease` (the P0 fix above).
+
+---
+
+### ✅ FIXED — Gap 3: File upload wired to platform
+
+`POST /api/v1/upload` now calls `DocumentUploadService.upload_document()` which delegates to `ServiceRequestPlatformClient.upload_file()` → `PUT /files`. The legacy `register_upload()` stub returning `"placeholder-document-id"` has been removed. Upload returns real `document_id`, `file_path`, `signed_url` from platform.
+
+---
+
+### ✅ FIXED — Platform client: token refresh
+
+`ServiceRequestPlatformClient` has both TTL-based pre-auth (1-hour TTL in `ensure_authenticated()`) and reactive 401 re-auth on `_post()` and `_patch()` calls. Token is refreshed automatically without manual restart.
+
+---
+
+### ✅ FIXED — Seed user property IDs
+
+`scripts/seed_users.py` updated: Jawharat Jeddah users (MALL_MANAGER, FM_MANAGER, OPERATIONS) now have `unique_property_ids: [3041]` matching the mock lease `t0105712` (`property_id: 3041`). Property-scoped lease queries forwarded through `LeaseLookupQuery.property_ids` to `HttpLeaseLookupService`.
+
+---
+
+### Open — Gap 4: FM_REVIEW (next sprint)
+
+The graph nodes exist (`fm_review_entry`, `fm_confirmation`, `fm_payload_builder`, `fm_api_submission`). Not yet tested end-to-end. Scope:
 - Collect `unit_readiness_date` and `expected_handover_date`
 - Upload FM documents (`SR_HANDOVER_CHECKLIST`, `SR_HANDOVER_SITE_SURVEY`, `SR_COP_CHECKLIST_OTHER`)
 - Call `PATCH /service-requests/{sr_id}` with `status: IN_PROCESS` (save progress)
 - Call `PATCH /service-requests/{sr_id}` with `status: APPROVED` (approve)
 
-### Gap 5 — RDD_REVIEW not end-to-end
+---
 
-The graph nodes exist but need completion:
+### Open — Gap 5: RDD_REVIEW (next sprint)
+
+The graph nodes exist (`rdd_review_entry`, `rdd_confirmation`, `rdd_payload_builder`, `rdd_api_submission`). Not yet tested end-to-end. Scope:
 - Collect `guideLineLink`, `actual_handover_date`, `fitout_start_date`, `fitout_end_date`, `trading_date`
 - Upload `DR_SR_HANDOVER_REPORT` with `document_type_status: APPROVED`
 - Call `POST /service-requests` with `status: REPORT_SUBMITTED` and existing `service_request_id`
-- Enforce date ordering: `actual_handover_date ≤ fitout_start_date ≤ fitout_end_date ≤ trading_date`
+- Date ordering enforced: `actual_handover_date ≤ fitout_start_date ≤ fitout_end_date ≤ trading_date` (already in `ValidationService.validate_rdd_date_order`)
 
-### Gap 6 — Platform status sync needs validation
+---
 
-`sr_status_sync_node` exists but the mapping from `service_request_operations` fields to chatbot `workflow_stage` needs to be verified and completed.
+### Open — Gap 6: Platform status sync
 
-### Gap 7 — Permissions fail-open on unknown actions
+`sr_status_sync_node` exists. The mapping from `service_request_operations` array to chatbot `workflow_stage` needs validation against real platform responses in a live environment.
 
-`PermissionService` allows unknown action names by default. This must be flipped to fail-closed before production.
+---
 
-### Gap 8 — Structured UI actions
+### Open — Gap 7: Permissions fail-closed
 
-The frontend only supports generic `confirm`/`cancel`. Stage-specific actions are needed:
-`confirm_create_sr`, `save_fm_progress`, `approve_fm_review`, `submit_rdd_report`, `select_lease`, `upload_document`
+`PermissionService` currently allows unknown action names. Flip to fail-closed before production — raise `PermissionDeniedError` for any unrecognised action.
 
-### Gap 9 — No application Dockerfile
+---
 
-Only infrastructure (Postgres, Redis) is containerised. The backend and frontend have no Dockerfiles. These are needed for any deployment beyond local development.
+### Open — Gap 8: Structured UI actions
+
+Frontend supports generic `confirm`/`cancel`. Stage-specific actions for FM/RDD flows are needed once those workflows are completed: `save_fm_progress`, `approve_fm_review`, `submit_rdd_report`.
+
+---
+
+### Open — Gap 9: No application Dockerfile
+
+Only infrastructure (Postgres, Redis) is containerised. Deployment beyond local development requires backend and frontend Dockerfiles.
+
+---
+
+### Open — Gap 10: Eval gaps in automated suite (minor)
+
+Two scenarios in `run_eval.py` still fail (31/33):
+- **S14**: Cancel-then-restart within a session — multi-session state management edge case
+- **S32**: Second SR in same session after first is submitted — stage reset after terminal state needs a "start over" signal
 
 ---
 
