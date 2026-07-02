@@ -1,6 +1,6 @@
-# Chatbot Test Queries — Helper Agent (Handover Service Request)
+# Chatbot Test Queries — Help Agent (Handover Service Request)
 
-> **Purpose:** Exhaustive catalogue of chat inputs to manually or programmatically test the Helper Agent across happy paths, edge cases, adversarial inputs, and broken/invalid combinations.
+> **Purpose:** Exhaustive catalogue of chat inputs to manually or programmatically test the Help Agent across happy paths, edge cases, adversarial inputs, and broken/invalid combinations.
 >
 > **What changed from the previous version:**
 > - Login is now required — every request must include `Authorization: Bearer <token>`
@@ -94,7 +94,7 @@ New handover service request please
 Handover SR
 ```
 
-**Expected:** Bot routes to `CREATE_HANDOVER_SERVICE_REQUEST`, asks for lease identifier.
+**Expected:** Bot routes to `CREATE_RDD_SERVICE_REQUEST`, asks for lease identifier.
 
 ---
 
@@ -1354,7 +1354,7 @@ curl -s -X POST http://localhost:8000/api/chat/service-request \
 ```
 update
 ```
-**Expected:** Intent `UPDATE_HANDOVER_SERVICE_REQUEST`, `active_agent = handover_service_request_agent`, bot asks which SR to update.
+**Expected:** Intent `UPDATE_RDD_SERVICE_REQUEST`, `active_agent = rdd_agent`, bot asks which SR to update.
 
 **Turn 2 (same session)**
 ```
@@ -1381,7 +1381,7 @@ start date
 8th june
 ```
 
-**Expected for each turn:** Intent stays `UPDATE_HANDOVER_SERVICE_REQUEST`, `active_agent` remains `handover_service_request_agent`, bot acknowledges the field/value and continues collecting — NOT the generic "create, update, approve, or check" clarification prompt.
+**Expected for each turn:** Intent stays `UPDATE_RDD_SERVICE_REQUEST`, `active_agent` remains `rdd_agent`, bot acknowledges the field/value and continues collecting — NOT the generic "create, update, approve, or check" clarification prompt.
 
 **Failure indicator (the bug):** Any turn where the bot resets to asking "would you like to create, update, approve, or check?" after the intent was already established.
 
@@ -1436,7 +1436,7 @@ approve the handover SR
 review and sign off the handover
 ```
 
-**Expected:** Intent `APPROVE_HANDOVER_SERVICE_REQUEST`, `active_agent` set, bot asks for the SR reference to approve.
+**Expected:** Intent `APPROVE_RDD_SERVICE_REQUEST`, `active_agent` set, bot asks for the SR reference to approve.
 
 ---
 
@@ -1454,7 +1454,7 @@ yes go ahead
 sign off
 ```
 
-**Expected:** Each turn stays on `APPROVE_HANDOVER_SERVICE_REQUEST` intent, bot does not reset.
+**Expected:** Each turn stays on `APPROVE_RDD_SERVICE_REQUEST` intent, bot does not reset.
 
 ---
 
@@ -1533,7 +1533,7 @@ let me think
 actually
 ```
 
-**Expected:** Intent `UPDATE_HANDOVER_SERVICE_REQUEST` is preserved in session DB across these filler turns. Bot may ask for clarification but must not reset the intent — the next substantive message (e.g. "change the start date to 10 june") should continue in the UPDATE workflow without re-establishing intent from scratch.
+**Expected:** Intent `UPDATE_RDD_SERVICE_REQUEST` is preserved in session DB across these filler turns. Bot may ask for clarification but must not reset the intent — the next substantive message (e.g. "change the start date to 10 june") should continue in the UPDATE workflow without re-establishing intent from scratch.
 
 **Failure indicator (the bug):** After a filler turn, the bot's next message asks the user to re-state whether they want to create/update/approve/check.
 
@@ -1554,7 +1554,7 @@ create a new handover for Under Armour
 
 **Expected:**
 - "start over" → `active_agent` cleared, `intent` cleared, bot confirms reset
-- "create a new handover..." → routes to `CREATE_HANDOVER_SERVICE_REQUEST` fresh
+- "create a new handover..." → routes to `CREATE_RDD_SERVICE_REQUEST` fresh
 
 ---
 
@@ -1620,7 +1620,7 @@ Turn 2:
 I want to create one for Under Armour
 ```
 
-**Expected:** Turn 1 answers the question. Turn 2 correctly routes to `CREATE_HANDOVER_SERVICE_REQUEST` — no stale `active_agent` from Turn 1.
+**Expected:** Turn 1 answers the question. Turn 2 correctly routes to `CREATE_RDD_SERVICE_REQUEST` — no stale `active_agent` from Turn 1.
 
 ---
 
@@ -1868,4 +1868,4 @@ curl -s -X POST http://localhost:8000/api/chat/service-request \
   | jq '{message, intent: .state.intent}'
 ```
 
-**Expected for all turns:** `intent` = `UPDATE_HANDOVER_SERVICE_REQUEST` (or `PREVIEW_SERVICE_REQUEST` on turn 5), `active_agent` = `handover_service_request_agent` from turn 1 onwards, no generic re-clarification message.
+**Expected for all turns:** `intent` = `UPDATE_RDD_SERVICE_REQUEST` (or `PREVIEW_SERVICE_REQUEST` on turn 5), `active_agent` = `rdd_agent` from turn 1 onwards, no generic re-clarification message.

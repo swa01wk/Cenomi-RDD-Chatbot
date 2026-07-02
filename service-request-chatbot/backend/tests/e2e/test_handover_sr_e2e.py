@@ -84,27 +84,27 @@ async def test_successful_handover_sr_creation(app_client: AsyncClient) -> None:
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(
                 {"lease_code": {"value": "LC-E2E-001", "confidence": 0.95}}
             ),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             make_lease_mock([_zara_lease()]),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
     ):
         # Turn 1: classify intent
         body1 = await post_turn(app_client, "I want to create a handover SR", user_id=_USER_ID)
-        assert body1.get("active_agent") == "handover_service_request_agent"
+        assert body1.get("active_agent") == "rdd_agent"
 
         session_id = body1.get("session_id")
         assert session_id is not None
@@ -112,23 +112,23 @@ async def test_successful_handover_sr_creation(app_client: AsyncClient) -> None:
     # Turn 2 & 3: supply data and confirm
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
         patch(
-            "app.agents.graph.nodes.payload_builder_node.build_create_handover_payload",
+            "app.agents.graph.nodes.handover.payload_builder_node.build_create_handover_payload",
             MagicMock(return_value=_all_collected_data()),
         ),
         patch(
-            "app.agents.graph.nodes.api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.api_submission_node.get_service_request_api_service",
             make_sr_api_mock("SR-E2E-001"),
         ),
     ):
@@ -163,21 +163,21 @@ async def test_user_changes_field_before_submission(app_client: AsyncClient) -> 
     # Turn 1: initial field extraction with startDate=2025-01-01
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(
                 {"startDate": {"value": "2025-01-01", "confidence": 0.9}}
             ),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             make_lease_mock([_zara_lease()]),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
     ):
@@ -191,21 +191,21 @@ async def test_user_changes_field_before_submission(app_client: AsyncClient) -> 
     # Turn 2: user corrects the start date to 2025-02-01
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(
                 {"startDate": {"value": "2025-02-01", "confidence": 0.95}}
             ),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             make_lease_mock([_zara_lease()]),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
     ):
@@ -247,11 +247,11 @@ async def test_missing_lease_flow(app_client: AsyncClient) -> None:
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(),  # empty extraction — no lease identifiers
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
     ):
@@ -301,17 +301,17 @@ async def test_multiple_lease_selection_flow(app_client: AsyncClient) -> None:
 
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(
                 {"brand": {"value": "Zara", "confidence": 0.9}}
             ),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             make_lease_mock([lease_a, lease_b]),
         ),
     ):
@@ -348,7 +348,7 @@ async def test_invalid_inspection_date_range(app_client: AsyncClient) -> None:
 
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(
                 {
                     "startDate": {"value": "2025-06-01", "confidence": 0.9},
@@ -357,11 +357,11 @@ async def test_invalid_inspection_date_range(app_client: AsyncClient) -> None:
             ),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             make_lease_mock([_zara_lease()]),
         ),
         # Use the real validation service — it must detect the inverted dates
@@ -395,23 +395,23 @@ async def test_api_failure_during_sr_creation(app_client: AsyncClient) -> None:
     """
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
         patch(
-            "app.agents.graph.nodes.payload_builder_node.build_create_handover_payload",
+            "app.agents.graph.nodes.handover.payload_builder_node.build_create_handover_payload",
             MagicMock(return_value=_all_collected_data()),
         ),
         patch(
-            "app.agents.graph.nodes.api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.api_submission_node.get_service_request_api_service",
             make_sr_api_mock(error="Internal Server Error"),
         ),
     ):
@@ -453,15 +453,15 @@ async def test_permission_denied(app_client: AsyncClient) -> None:
 
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(
                 return_value=[
                     {
@@ -475,7 +475,7 @@ async def test_permission_denied(app_client: AsyncClient) -> None:
             ),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             make_lease_mock([_zara_lease()]),
         ),
     ):
@@ -551,15 +551,15 @@ async def test_user_tries_to_skip_required_fields(app_client: AsyncClient) -> No
     """
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(),  # empty — no fields extracted
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             make_lease_mock([]),  # no lease match — asks for more info
         ),
     ):
@@ -613,11 +613,11 @@ async def test_trace_replay_correctness(app_client: AsyncClient) -> None:
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             make_field_extraction_mock(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
     ):
@@ -645,8 +645,8 @@ async def test_trace_replay_correctness(app_client: AsyncClient) -> None:
     )
     mock_trace.created_at = datetime.now(tz=timezone.utc)
     mock_trace.completed_at = datetime.now(tz=timezone.utc)
-    mock_trace.active_agent = "handover_service_request_agent"
-    mock_trace.intent = "CREATE_HANDOVER_SERVICE_REQUEST"
+    mock_trace.active_agent = "rdd_agent"
+    mock_trace.intent = "CREATE_RDD_SERVICE_REQUEST"
     mock_trace.service_category = "FIT_OUT_AND_HANDOVER"
     mock_trace.sub_category = "HANDOVER"
     mock_trace.workflow_stage_before = None

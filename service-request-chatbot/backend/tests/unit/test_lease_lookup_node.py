@@ -21,14 +21,14 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.agents.graph.nodes.lease_lookup_node import (
+from app.agents.graph.nodes.handover.lease_lookup_node import (
     _LEASE_ENRICHMENT_FIELDS,
     _MULTI_MATCH_MESSAGE,
     _NO_LEASE_FIELDS_MESSAGE,
     _NO_MATCH_MESSAGE,
     lease_lookup_node,
 )
-from app.agents.graph.nodes.merge_state_node import BACKEND_PROTECTED_FIELDS
+from app.agents.graph.nodes.handover.merge_state_node import BACKEND_PROTECTED_FIELDS
 from app.agents.services.lease_lookup_service import (
     AbstractLeaseLookupService,
     LeaseRecord,

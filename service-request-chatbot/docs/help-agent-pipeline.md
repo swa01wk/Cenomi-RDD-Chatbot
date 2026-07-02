@@ -1,11 +1,12 @@
-# Helper Agent — Pipeline, Design & Workflow Reference
+# Help Agent — Pipeline, Design & Workflow Reference
 
-> **Purpose:** Complete technical reference for the Helper Agent system as currently implemented. Covers architecture, all supported workflows, user lifecycle, RBAC, node design, and implementation details.
+> **Purpose:** Complete technical reference for the Help Agent system as currently implemented. Covers architecture, agent taxonomy, RBAC, FAQ RAG integration, and the LangGraph graph design.
 >
 > **Status:** Production-ready design · `gpt-5.4-mini` · Python 3.11 · FastAPI + LangGraph
 >
 > **Related docs:**
-> - [`agent-design-complete.md`](agent-design-complete.md) — SR chatbot node-level reference
+> - [`rdd-agent.md`](rdd-agent.md) — RDD Agent lifecycle, phases, fields, and extension guide
+> - [`production-readiness.md`](production-readiness.md) — Production gap assessment and hardening plan
 > - [`test-failures-analysis.md`](test-failures-analysis.md) — Open test issues
 
 ---
@@ -17,7 +18,7 @@
 3. [Tech Stack](#3-tech-stack)
 4. [Authentication & Login](#4-authentication--login)
 5. [Roles & Privileges](#5-roles--privileges)
-6. [The Helper Agent Graph](#6-the-helper-agent-graph)
+6. [The Help Agent Graph](#6-the-helper-agent-graph)
 7. [Workflow 1 — FAQ (Q&A)](#7-workflow-1--faq-qa)
 8. [Workflow 2 — CREATE_SR (Mall Manager)](#8-workflow-2--create_sr-mall-manager)
 9. [Workflow 3 — FM_REVIEW (FM Manager / Operations)](#9-workflow-3--fm_review-fm-manager--operations)
@@ -36,30 +37,45 @@
 
 ## 1. System Overview
 
-The **Helper Agent** is a conversational AI system for the Cenomi Mall Management Platform. It serves as the single entry point for all user interactions — answering platform questions and guiding users through structured handover service request (SR) workflows.
+The **Help Agent** is a conversational AI system for the Cenomi Mall Management Platform. It serves as the single entry point for all user interactions — answering platform questions and guiding users through structured handover service request (SR) workflows.
 
 ### Core design principles
 
 | Principle | Implementation |
 |---|---|
 | **Single entry point** | One FastAPI service handles all roles and all workflow stages |
-| **Supervisor = Helper Agent** | The LangGraph supervisor node IS the helper agent — no separate routing layer |
+| **Supervisor = Help Agent** | The LangGraph supervisor node IS the help agent — no separate routing layer |
 | **LLM proposes, code decides** | LLM extracts fields and classifies intent; all validation, routing, and submission is deterministic code |
 | **Role-aware from the start** | JWT roles gate every intent, every stage, every API action |
 | **Sequential handoff** | Three roles work on the same SR in sequence; each has their own independent chat session |
 | **Stateless graph, stateful DB** | Graph runs fresh each turn; all continuity is in PostgreSQL |
 | **Fail-safe observability** | Every node span, LLM call, and tool call recorded; tracing errors never crash the chat |
 
-### What the Helper Agent does
+### Agent taxonomy
+
+The system uses two named agents with distinct responsibilities:
+
+| Agent | Identifier | Responsibilities |
+|-------|-----------|-----------------|
+| **Help Agent** | (this graph) | Supervisor intent classification · FAQ Q&A with hybrid RAG search · Routes SR intents to registered agents |
+| **RDD Agent** | `rdd_agent` | Full RDD SR lifecycle: CREATE_SR → FM_REVIEW → RDD_REVIEW · Three sequential workflow phases · See [`rdd-agent.md`](rdd-agent.md) |
+
+Adding a future agent (e.g. `rcd_agent` for renovation) requires only: a new `WorkflowConfig` entry, a `SERVICE_REQUEST_AGENT_REGISTRY` entry, new node files, and wiring in the graph. All shared pipeline nodes pick it up automatically.
+
+### What the Help Agent does
 
 ```
-User logs in → Helper Agent receives every message
+User logs in → Help Agent receives every message
 
-  If the user asks a question:
-      → FAQ node answers from embedded knowledge prompt (no external search)
+  If the user asks a question (ASK_HELP / UNKNOWN intent):
+      → faq_node runs hybrid Azure AI Search (cenomi-help-index)
+      → Retrieved chunks prepended to FAQ_SYSTEM_PROMPT
+      → LLM answers with RAG context + inline [Source: ...] citations
+      → faq_sources[] returned in API response
+      → Fallback: static FAQ_SYSTEM_PROMPT if Azure Search unavailable
 
-  If the user wants to create/review a service request:
-      → SR action agent activates (full multi-turn HITL workflow)
+  If the user wants to create/review a service request (RDD SR intents):
+      → rdd_agent activates (full multi-turn HITL workflow)
       → Field collection, lease resolution, validation, confirmation, API submission
 ```
 
@@ -75,7 +91,7 @@ graph TB
         LOGIN -->|"JWT stored"| CHAT
     end
 
-    subgraph HelperAgentLayer["Helper Agent (Python FastAPI + LangGraph)"]
+    subgraph HelperAgentLayer["Help Agent (Python FastAPI + LangGraph)"]
         AUTH["POST /api/auth/login\nbcrypt verify → issue HS256 JWT"]
         CHATEP["POST /api/chat/service-request\nJWT required"]
         UPLOAD["POST /api/v1/upload\nDocument upload"]
@@ -187,7 +203,7 @@ sequenceDiagram
 sequenceDiagram
     actor User
     participant UI as ChatUI
-    participant API as Helper Agent
+    participant API as Help Agent
     participant DB as PostgreSQL
 
     User->>UI: Opens /chat
@@ -326,9 +342,9 @@ flowchart LR
 _SR_READ = {"ASK_HELP", "CHECK_SERVICE_REQUEST_STATUS", "PREVIEW_SERVICE_REQUEST", "UNKNOWN"}
 
 ROLE_PERMITTED_INTENTS = {
-    "MALL_MANAGER": _SR_READ | {"CREATE_HANDOVER_SERVICE_REQUEST", "UPDATE_HANDOVER_SERVICE_REQUEST"},
-    "FM_MANAGER":   _SR_READ | {"APPROVE_HANDOVER_SERVICE_REQUEST"},
-    "OPERATIONS":   _SR_READ | {"APPROVE_HANDOVER_SERVICE_REQUEST"},
+    "MALL_MANAGER": _SR_READ | {"CREATE_RDD_SERVICE_REQUEST", "UPDATE_RDD_SERVICE_REQUEST"},
+    "FM_MANAGER":   _SR_READ | {"APPROVE_RDD_SERVICE_REQUEST"},
+    "OPERATIONS":   _SR_READ | {"APPROVE_RDD_SERVICE_REQUEST"},
     "DD_ENGINEER":  _SR_READ,  # RDD action triggered by sr_status_sync, not supervisor intent
     "ADMIN":        frozenset(ALL_INTENTS),
 }
@@ -336,7 +352,7 @@ ROLE_PERMITTED_INTENTS = {
 
 ---
 
-## 6. The Helper Agent Graph
+## 6. The Help Agent Graph
 
 ### Full graph (24 nodes)
 
@@ -477,7 +493,7 @@ The FAQ workflow handles any question about the platform, workflows, roles, docu
 ```
 User: "What documents do I need for FM review?"
 
-Helper Agent: "For the FM Review stage, three documents are required:
+Help Agent: "For the FM Review stage, three documents are required:
   1. SR Handover Checklist (SR_HANDOVER_CHECKLIST)
   2. SR Handover Site Survey (SR_HANDOVER_SITE_SURVEY)
   3. COP Checklist / Other (SR_COP_CHECKLIST_OTHER)
@@ -552,7 +568,7 @@ A Mall Manager at a Cenomi property needs to formally initiate the handover proc
 flowchart TD
     T1["Turn 1: User states intent\ne.g. 'Create handover SR for Under Armour'"]
     SUPER["supervisor\nCREATE_HANDOVER_SR intent\nMALL_MANAGER role check"]
-    REG["registry\nFIT_OUT_AND_HANDOVER / HANDOVER\n→ handover_service_request_agent"]
+    REG["registry\nFIT_OUT_AND_HANDOVER / HANDOVER\n→ rdd_agent"]
     HE["handover_entry\nno action_override → normal turn"]
     FE["field_extraction\nLLM extracts all fields mentioned\n{value, confidence ≥ 0.6}"]
     MS["merge_state\nMerge into collected_data\nAuto-generate title if absent"]
@@ -583,7 +599,7 @@ flowchart TD
 ```
 Turn 1 — Mall Manager triggers CREATE_SR
   User:   "I want to create a handover service request for Under Armour."
-  Agent:  Classifies CREATE_HANDOVER_SERVICE_REQUEST
+  Agent:  Classifies CREATE_RDD_SERVICE_REQUEST
           Registry → handover_entry → field_extraction
           Extracts: brand="Under Armour"
           Lease lookup → t0105712 (single match)
@@ -707,7 +723,7 @@ The FM_REVIEW workflow allows an FM Manager or Operations team member to review 
 
 ### Use case
 
-After the Mall Manager submits the SR, the platform notifies the FM Manager. The FM Manager opens the SR (frontend passes `sr_id`), the Helper Agent detects the `FM_REVIEW` stage via `sr_status_sync`, and guides the FM Manager through the review workflow.
+After the Mall Manager submits the SR, the platform notifies the FM Manager. The FM Manager opens the SR (frontend passes `sr_id`), the Help Agent detects the `FM_REVIEW` stage via `sr_status_sync`, and guides the FM Manager through the review workflow.
 
 ### Trigger mechanism
 
@@ -822,7 +838,7 @@ The RDD_REVIEW workflow guides a DD Engineer through submitting the final RDD Ha
 
 ### Use case
 
-After FM Manager approves the SR, the platform notifies the DD Engineer. The DD Engineer opens the SR, the Helper Agent detects `RDD_REVIEW` stage, and guides them through submitting the handover report.
+After FM Manager approves the SR, the platform notifies the DD Engineer. The DD Engineer opens the SR, the Help Agent detects `RDD_REVIEW` stage, and guides them through submitting the handover report.
 
 ### Two phases
 
@@ -936,7 +952,7 @@ sequenceDiagram
     actor MM as Mall Manager
     actor FM as FM Manager
     actor DD as DD Engineer
-    participant HA as Helper Agent
+    participant HA as Help Agent
     participant Platform as Cenomi Platform API
 
     Note over MM,Platform: Stage 1 — CREATE_SR (Mall Manager's own session)
@@ -985,7 +1001,7 @@ sequenceDiagram
 1. Mall Manager gets `sr_id` from the SR submission response
 2. Platform notification to FM Manager contains `sr_id`
 3. FM Manager opens the SR in the UI → frontend includes `sr_id` in the request body
-4. Helper Agent receives `sr_id` → `load_session` detects it → `sr_status_sync` runs
+4. Help Agent receives `sr_id` → `load_session` detects it → `sr_status_sync` runs
 5. Same flow for DD Engineer after FM approval
 
 ### Per-user session isolation
@@ -1098,8 +1114,8 @@ This is **read-only** — does not advance the workflow or create a draft.
 | `attachments` | `list[dict]` | — | File attachment metadata |
 | `trace_id` | `str` | ✓ (agent_traces) | Observability trace for this turn |
 | `conversation_history` | `list[dict]` | ✓ (messages table) | Last 10 turns `[{role, content}]` |
-| `active_agent` | `str\|None` | ✓ (chat_sessions) | e.g. `"handover_service_request_agent"` |
-| `intent` | `str\|None` | ✓ (chat_sessions) | e.g. `"CREATE_HANDOVER_SERVICE_REQUEST"` |
+| `active_agent` | `str\|None` | ✓ (chat_sessions) | e.g. `"rdd_agent"` |
+| `intent` | `str\|None` | ✓ (chat_sessions) | e.g. `"CREATE_RDD_SERVICE_REQUEST"` |
 | `service_category` | `str\|None` | ✓ (draft) | e.g. `"FIT_OUT_AND_HANDOVER"` |
 | `sub_category` | `str\|None` | ✓ (draft) | e.g. `"HANDOVER"` |
 | `workflow_stage` | `str\|None` | ✓ (both) | `CREATE_SR` / `FM_REVIEW` / `RDD_REVIEW` / `SR_CREATED` / `SR_COMPLETED` |
@@ -1372,7 +1388,7 @@ Body:
 Response:
 {
   "session_id": "uuid",
-  "active_agent": "handover_service_request_agent|null",
+  "active_agent": "rdd_agent|null",
   "message": "Assistant reply text",
   "ui": {
     "type": "text|confirmation_card|lease_selection|sr_preview_card",
@@ -1478,7 +1494,7 @@ backend/
 │   │       └── upload.py                POST /api/v1/upload
 │   ├── agents/
 │   │   ├── graph/
-│   │   │   ├── helper_agent_graph.py    ← MAIN GRAPH (24 nodes, all routing)
+│   │   │   ├── help_agent_graph.py    ← MAIN GRAPH (24 nodes, all routing)
 │   │   │   ├── service_request_graph.py ← Backward-compat stub → helper graph
 │   │   │   ├── state.py                 ServiceRequestGraphState TypedDict
 │   │   │   └── nodes/
@@ -1493,7 +1509,7 @@ backend/
 │   │   │   ├── handover_extraction_prompt.py
 │   │   │   └── response_generation_prompt.py
 │   │   ├── schemas/
-│   │   │   ├── helper_schema.py         ROLE_PERMITTED_INTENTS, HelperSupervisorDecision
+│   │   │   ├── help_agent_schema.py         ROLE_PERMITTED_INTENTS, HelperSupervisorDecision
 │   │   │   ├── handover_schema.py       Stage definitions, field sets, BACKEND_COMPUTED_FIELDS
 │   │   │   └── supervisor_schema.py     SupervisorDecision Pydantic model
 │   │   ├── registries/
@@ -1609,13 +1625,13 @@ SERVICE_REQUEST_AGENT_REGISTRY["WORK_PERMIT"] = {
 }
 ```
 
-**Step 3 — Add to `_AGENT_ENTRY_NODES`** in [`app/agents/graph/helper_agent_graph.py`](../backend/app/agents/graph/helper_agent_graph.py):
+**Step 3 — Add to `_AGENT_ENTRY_NODES`** in [`app/agents/graph/help_agent_graph.py`](../backend/app/agents/graph/help_agent_graph.py):
 
 ```python
 _AGENT_ENTRY_NODES["work_permit_agent"] = "work_permit_entry"
 ```
 
-**Step 4 — Add to `ROLE_PERMITTED_INTENTS`** in [`app/agents/schemas/helper_schema.py`](../backend/app/agents/schemas/helper_schema.py) (security gate — deliberate, not auto-derived):
+**Step 4 — Add to `ROLE_PERMITTED_INTENTS`** in [`app/agents/schemas/help_agent_schema.py`](../backend/app/agents/schemas/help_agent_schema.py) (security gate — deliberate, not auto-derived):
 
 ```python
 ROLE_PERMITTED_INTENTS["CONTRACTOR"] = _SR_READ_INTENTS | frozenset({"CREATE_WORK_PERMIT"})
@@ -1628,7 +1644,7 @@ ROLE_PERMITTED_INTENTS["CONTRACTOR"] = _SR_READ_INTENTS | frozenset({"CREATE_WOR
 - `work_permit_payload_builder_node.py` — build submission payload
 - `work_permit_api_submission_node.py` — call the platform API
 
-**Step 7 — Wire new nodes** into `build_helper_agent_graph()` in `helper_agent_graph.py`.
+**Step 7 — Wire new nodes** into `build_help_agent_graph()` in `help_agent_graph.py`.
 
 ### What does NOT need to change
 
@@ -1641,7 +1657,7 @@ When the `WorkflowConfig` is registered, these shared nodes automatically pick u
 | `_route_after_sync` | Maps new `stage_sync_nodes` without any code change |
 | `_route_after_validation` | Uses `collection_stages` and `confirmation_nodes` |
 | `_SR_ACTION_INTENTS` | Auto-derived from all `action_intents` in the registry |
-| `ALL_INTENTS` (helper_schema) | Auto-derived from the registry |
+| `ALL_INTENTS` (help_agent_schema) | Auto-derived from the registry |
 
 ### Effort estimate per workflow type
 

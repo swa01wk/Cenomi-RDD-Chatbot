@@ -52,13 +52,13 @@ The following changes were made in the multi-workflow scaling session. No previo
 - `field_extraction_service.py` — `system_prompt` param (optional, falls back to handover default)
 - `field_extraction_node.py` — looks up `WorkflowConfig` by `active_agent`, passes per-workflow prompt
 - `missing_field_node.py` — looks up `WorkflowConfig` for field questions, backend fields, triggers
-- `helper_agent_graph.py` — data-driven `_route_after_sync`, `_route_after_validation`, dynamic `_SR_ACTION_INTENTS`
-- `helper_schema.py` — `HelperIntent = str` (was `Literal[...]`), `ALL_INTENTS` derived from registry
+- `help_agent_graph.py` — data-driven `_route_after_sync`, `_route_after_validation`, dynamic `_SR_ACTION_INTENTS`
+- `help_agent_schema.py` — `HelperIntent = str` (was `Literal[...]`), `ALL_INTENTS` derived from registry
 
 **New test files:**
 - `tests/unit/test_workflow_config.py` — 21 tests
-- `tests/unit/test_helper_agent_graph.py` — 25 tests
-- `tests/unit/test_helper_schema.py` — 23 tests
+- `tests/unit/test_help_agent_graph.py` — 25 tests
+- `tests/unit/test_help_agent_schema.py` — 23 tests
 - Extended `tests/unit/test_field_extraction.py` — 4 new tests
 - Extended `tests/unit/test_missing_field_node.py` — 3 new tests
 
@@ -136,7 +136,7 @@ AssertionError: assert ('unable' in 'your handover service request has been succ
 ```
 
 **Issue B — Tracing call counts changed:**  
-The helper agent graph has more nodes than the original SR graph. Nodes like `faq_node`, `registry_node`, `supervisor_node` all trigger `start_run`/`finish_run`. Tests that assert "called exactly once" now fail because the graph invokes more tracing calls.
+The help agent graph has more nodes than the original SR graph. Nodes like `faq_node`, `registry_node`, `supervisor_node` all trigger `start_run`/`finish_run`. Tests that assert "called exactly once" now fail because the graph invokes more tracing calls.
 
 ```
 AssertionError: Expected 'start_run' to have been called once. Called 2 times.
@@ -439,7 +439,7 @@ _EXPECTED_KEYS = {
 **Root cause:** Two issues:
 
 **Issue A — Call counts changed with helper graph:**  
-`start_run` is now called multiple times per turn because the helper agent graph has more traced nodes than the original SR-only graph. Tests asserting "called exactly once" fail.
+`start_run` is now called multiple times per turn because the help agent graph has more traced nodes than the original SR-only graph. Tests asserting "called exactly once" fail.
 
 ```
 AssertionError: Expected 'start_run' to have been called once. Called 2 times.
@@ -678,4 +678,4 @@ All 65 remaining failures are either:
 3. **Call count assumptions** — tests assert exact invocation counts that changed when the graph gained more nodes
 4. **Intentional design decisions** — `title` excluded from extraction, `description=""` valid for optional fields
 
-The core SR workflow (CREATE_SR → FM_REVIEW → RDD_REVIEW → SR_COMPLETED), the Helper Agent graph, RBAC enforcement, FAQ node, and observability infrastructure are all functioning correctly as demonstrated by the **1,116 passing tests**.
+The core SR workflow (CREATE_SR → FM_REVIEW → RDD_REVIEW → SR_COMPLETED), the Help Agent graph, RBAC enforcement, FAQ node, and observability infrastructure are all functioning correctly as demonstrated by the **1,116 passing tests**.

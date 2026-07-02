@@ -27,9 +27,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.agents.graph.nodes.rdd_api_submission_node import rdd_api_submission_node
-from app.agents.graph.nodes.rdd_payload_builder_node import rdd_payload_builder_node
-from app.agents.graph.nodes.rdd_review_entry_node import rdd_review_entry_node
+from app.agents.graph.nodes.handover.rdd_api_submission_node import rdd_api_submission_node
+from app.agents.graph.nodes.handover.rdd_payload_builder_node import rdd_payload_builder_node
+from app.agents.graph.nodes.handover.rdd_review_entry_node import rdd_review_entry_node
 from app.agents.services.payload_builder_service import _to_ddmmyyyy
 
 
@@ -233,7 +233,7 @@ class TestRDDApiSubmissionNode:
             error="server error",
         )
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service"
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service"
         ) as mock_svc_factory:
             mock_svc = AsyncMock()
             mock_svc.submit_report = AsyncMock(return_value=mock_result)
@@ -257,7 +257,7 @@ class TestRDDApiSubmissionNode:
             status_code=201,
         )
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service"
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service"
         ) as mock_svc_factory:
             mock_svc = AsyncMock()
             mock_svc.submit_report = AsyncMock(return_value=mock_result)

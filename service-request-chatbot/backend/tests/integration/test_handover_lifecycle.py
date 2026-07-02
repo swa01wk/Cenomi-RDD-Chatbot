@@ -21,15 +21,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.agents.graph.nodes.api_submission_node import api_submission_node
-from app.agents.graph.nodes.fm_api_submission_node import fm_api_submission_node
-from app.agents.graph.nodes.fm_payload_builder_node import fm_payload_builder_node
-from app.agents.graph.nodes.fm_review_entry_node import fm_review_entry_node
-from app.agents.graph.nodes.payload_builder_node import payload_builder_node
-from app.agents.graph.nodes.rdd_api_submission_node import rdd_api_submission_node
-from app.agents.graph.nodes.rdd_payload_builder_node import rdd_payload_builder_node
-from app.agents.graph.nodes.rdd_review_entry_node import rdd_review_entry_node
-from app.agents.graph.nodes.sr_status_sync_node import sr_status_sync_node
+from app.agents.graph.nodes.handover.api_submission_node import api_submission_node
+from app.agents.graph.nodes.handover.fm_api_submission_node import fm_api_submission_node
+from app.agents.graph.nodes.handover.fm_payload_builder_node import fm_payload_builder_node
+from app.agents.graph.nodes.handover.fm_review_entry_node import fm_review_entry_node
+from app.agents.graph.nodes.handover.payload_builder_node import payload_builder_node
+from app.agents.graph.nodes.handover.rdd_api_submission_node import rdd_api_submission_node
+from app.agents.graph.nodes.handover.rdd_payload_builder_node import rdd_payload_builder_node
+from app.agents.graph.nodes.handover.rdd_review_entry_node import rdd_review_entry_node
+from app.agents.graph.nodes.shared.sr_status_sync_node import sr_status_sync_node
 from app.agents.services.service_request_api_service import ServiceRequestCreationResult
 
 
@@ -49,7 +49,7 @@ def _base_state(**kwargs: Any) -> dict[str, Any]:
         "backend_refs": {},
         "action_override": None,
         "workflow_stage": "CREATE_SR",
-        "active_agent": "handover_service_request_agent",
+        "active_agent": "rdd_agent",
         "confirmation_status": "CONFIRMED",
     }
     state.update(kwargs)
@@ -136,7 +136,7 @@ class TestCreateSRLifecycle:
         # Submit
         mock_result = _mock_create_result()
         with patch(
-            "app.agents.graph.nodes.api_submission_node.get_service_request_api_service"
+            "app.agents.graph.nodes.handover.api_submission_node.get_service_request_api_service"
         ) as mock_factory:
             mock_svc = AsyncMock()
             mock_svc.create_service_request = AsyncMock(return_value=mock_result)
@@ -174,7 +174,7 @@ class TestSRStatusSync:
             status_code=200,
         )
         with patch(
-            "app.agents.graph.nodes.sr_status_sync_node.get_service_request_api_service"
+            "app.agents.graph.nodes.shared.sr_status_sync_node.get_service_request_api_service"
         ) as mock_factory:
             mock_svc = AsyncMock()
             mock_svc.get_service_request = AsyncMock(return_value=mock_result)
@@ -209,7 +209,7 @@ class TestSRStatusSync:
             status_code=200,
         )
         with patch(
-            "app.agents.graph.nodes.sr_status_sync_node.get_service_request_api_service"
+            "app.agents.graph.nodes.shared.sr_status_sync_node.get_service_request_api_service"
         ) as mock_factory:
             mock_svc = AsyncMock()
             mock_svc.get_service_request = AsyncMock(return_value=mock_result)
@@ -264,7 +264,7 @@ class TestFMReviewLifecycle:
         # Submit
         mock_result = _mock_patch_result()
         with patch(
-            "app.agents.graph.nodes.fm_api_submission_node.get_service_request_api_service"
+            "app.agents.graph.nodes.handover.fm_api_submission_node.get_service_request_api_service"
         ) as mock_factory:
             mock_svc = AsyncMock()
             mock_svc.patch_service_request = AsyncMock(return_value=mock_result)
@@ -284,7 +284,7 @@ class TestFMReviewLifecycle:
 
         mock_result = _mock_patch_result()
         with patch(
-            "app.agents.graph.nodes.fm_api_submission_node.get_service_request_api_service"
+            "app.agents.graph.nodes.handover.fm_api_submission_node.get_service_request_api_service"
         ) as mock_factory:
             mock_svc = AsyncMock()
             mock_svc.patch_service_request = AsyncMock(return_value=mock_result)
@@ -352,7 +352,7 @@ class TestRDDReviewLifecycle:
         # Submit
         mock_result = _mock_submit_result()
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service"
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service"
         ) as mock_factory:
             mock_svc = AsyncMock()
             mock_svc.submit_report = AsyncMock(return_value=mock_result)

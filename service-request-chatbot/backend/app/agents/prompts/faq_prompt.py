@@ -1,4 +1,4 @@
-"""FAQ system prompt for the Helper Agent Q&A path.
+"""FAQ system prompt for the Help Agent Q&A path.
 
 This file is the single place to add, edit, or remove FAQ content.
 No index rebuild or infrastructure redeployment is needed — changes take
@@ -28,7 +28,8 @@ Output a JSON object with a single key "message" containing your answer.
 ## Platform Overview
 
 The Cenomi Mall Management Platform allows mall managers and facilities management teams
-to manage handover service requests for tenants through a structured, multi-stage workflow.
+to manage service requests for tenants through structured, multi-stage workflows covering
+handover, work permits, operations confirmations, fit-out, tenant profile updates, and more.
 
 ---
 
@@ -37,6 +38,7 @@ to manage handover service requests for tenants through a structured, multi-stag
 **Mall Manager**
 - Creates and submits handover service requests on behalf of tenants.
 - Can check the status and preview any SR they submitted.
+- Can update tenant profile, company name, and brand information.
 
 **FM Manager (Facilities Management Manager)**
 - Reviews submitted service requests.
@@ -104,12 +106,120 @@ Allowed formats: PDF, JPEG, PNG.
 
 ---
 
+## Work Permit Service Requests
+
+Work permit SRs allow tenants to request access to perform work in their units.
+There are several sub-types:
+
+**Construction:**
+- Construction – Hot Work: for welding, cutting, or other heat-producing activities.
+- Construction – Cold Work: for general construction without heat-producing activities.
+- Construction – Roof Access: for work requiring access to the roof.
+
+**Maintenance:**
+- Maintenance – Hot Work: for heat-producing maintenance activities.
+- Maintenance – Cold Work: for general maintenance without heat-producing activities.
+- Maintenance – Roof Access: for maintenance work requiring roof access.
+
+**Operations:**
+- Operations work permit: for operational activities within the unit.
+
+To create a work permit SR, tell the assistant what type of work you need to perform.
+Provide the unit details, dates, and description when prompted.
+
+---
+
+## Operations Service Requests
+
+**Trading Confirmation**
+Used to confirm that a tenant has started trading in their unit.
+Provide the trading start date and any relevant comments.
+
+**Fit-Out Start Confirmation**
+Used to confirm that fit-out works have commenced in a unit.
+Provide the fit-out start date and unit details.
+
+**Delivery Requirements**
+Used to communicate delivery schedules and requirements to the mall operations team.
+Include delivery dates, items, and any special instructions.
+
+**Closing Procedures**
+Used to notify the mall of planned temporary or permanent closure of a unit.
+Provide closing dates and reason.
+
+---
+
+## Tenant Profile and Contact Management
+
+**Update Company Name**
+Submit an SR to request a company name change for your tenant profile.
+
+**Update Contacts / Add Lease Contacts**
+Use these SRs to update or add contact persons associated with your lease.
+Provide the contact's name, email, and phone number.
+
+---
+
+## Fit-Out and Approval Workflow
+
+When a tenant is fitting out a new unit, the fit-out approval workflow must be followed:
+1. Submit the fit-out drawings for approval.
+2. Await mall approval (FM Manager reviews drawings).
+3. Once approved, submit a Fit-Out Start Confirmation SR.
+4. After completion, submit a Handover Confirmation SR.
+
+The platform tracks each step and notifies the relevant team automatically.
+
+---
+
+## Lease Management
+
+**Lease Details**
+You can view your lease details including monthly and annual rent values,
+lease duration, payment schedule, and associated unit codes.
+
+**Lease Documents**
+Downloadable lease documents include: Contract Proposal, DD Drawings, Permits.
+You can also upload documents (one at a time) for admin approval.
+
+**Lease Amendments**
+If your lease has been amended (e.g. area change, term extension), the amendment
+details are visible in the platform showing the amendment date, status, and specifics.
+
+**Expiring Leases**
+The platform notifies you when a lease is approaching its expiry date.
+Contact your Cenomi representative to discuss renewal options.
+
+**Lease Inquiries**
+You can raise inquiries related to your lease contract through the Inquiries section.
+Each inquiry is organized into four parts: the inquiry itself, the proposal, any
+amendments, and the final contract document.
+
+---
+
+## Document Management
+
+The platform provides a centralized document area for tenants:
+- **Company Documents:** VAT Document, Company Profile, National ID, Commercial Registration (CR).
+- **Lease Documents:** Contract Proposal, DD Drawings, Permits.
+
+Documents can be uploaded (one at a time) and are sent for admin approval before syncing.
+
+---
+
 ## Checking SR Status and Previewing an SR
 
 Any user who is part of an SR cycle can check its status or preview its details at any time:
 - Open the SR from your notifications or SR list in the platform.
 - The assistant will show the current stage, all collected fields, and uploaded documents.
 - This is a read-only operation — it does not advance the workflow.
+
+---
+
+## Reports and Analytics
+
+The platform provides sales data reports and other analytics for mall managers.
+Access reports from the Reports section in the main navigation.
 
 ---
 
@@ -148,4 +258,13 @@ A: No. RDD review only becomes available after FM Manager approves the FM review
 **Q: I can't see my lease — what should I do?**
 A: Try providing your lease code directly (e.g. T0028604). If the lease is still not found,
    contact your system administrator to verify your lease assignment.
+
+**Q: What is the Preventive Maintenance Schedule?**
+A: The mall publishes a preventive maintenance schedule for all shared facilities.
+   You can view it from the Mall Overview section under Facility Management.
+
+**Q: How do I find mall contact information (FM Manager, Mall Admin, Customer Relations)?**
+A: Contact details for each mall's FM Manager, Mall Admin, and Customer Relations Team
+   are available in the platform. Ask the assistant "Who is the FM Manager at [Mall Name]?"
+   and it will look up the contact details for you.
 """

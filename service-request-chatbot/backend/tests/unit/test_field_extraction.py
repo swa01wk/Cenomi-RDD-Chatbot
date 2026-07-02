@@ -485,7 +485,7 @@ class TestFieldExtractionNode:
     @pytest.mark.asyncio
     async def test_extracted_fields_written_to_state(self) -> None:
         """Node must return extracted_fields in the state update."""
-        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.graph.nodes.handover.field_extraction_node import field_extraction_node
 
         response = _llm_response(
             fields={
@@ -496,7 +496,7 @@ class TestFieldExtractionNode:
         state = _base_state(user_message="Title: Handover SR at Cenomi Mall")
 
         with patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=_make_gateway_mock(response),
         ):
             result = await field_extraction_node(state)
@@ -509,7 +509,7 @@ class TestFieldExtractionNode:
     @pytest.mark.asyncio
     async def test_no_merge_into_collected_data(self) -> None:
         """Node must NOT write to collected_data — that belongs to merge_state_node."""
-        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.graph.nodes.handover.field_extraction_node import field_extraction_node
 
         response = _llm_response(
             fields={"title": {"value": "Some SR", "confidence": 0.9}}
@@ -517,7 +517,7 @@ class TestFieldExtractionNode:
         state = _base_state(user_message="title is Some SR")
 
         with patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=_make_gateway_mock(response),
         ):
             result = await field_extraction_node(state)
@@ -527,7 +527,7 @@ class TestFieldExtractionNode:
     @pytest.mark.asyncio
     async def test_trace_manager_absent_path(self) -> None:
         """Node runs correctly when trace_manager is not in state."""
-        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.graph.nodes.handover.field_extraction_node import field_extraction_node
 
         response = _llm_response(
             fields={"lease_code": {"value": "LC-001", "confidence": 1.0}}
@@ -537,7 +537,7 @@ class TestFieldExtractionNode:
         assert "trace_manager" not in state
 
         with patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=_make_gateway_mock(response),
         ):
             result = await field_extraction_node(state)
@@ -548,7 +548,7 @@ class TestFieldExtractionNode:
     @pytest.mark.asyncio
     async def test_llm_failure_returns_empty_extracted_fields(self) -> None:
         """On LLM failure the node must not raise and must return empty extracted_fields."""
-        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.graph.nodes.handover.field_extraction_node import field_extraction_node
 
         gateway = MagicMock()
         gateway.model = "gpt-4o-mini"
@@ -557,7 +557,7 @@ class TestFieldExtractionNode:
         state = _base_state(user_message="any message")
 
         with patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=gateway,
         ):
             result = await field_extraction_node(state)
@@ -568,7 +568,7 @@ class TestFieldExtractionNode:
     @pytest.mark.asyncio
     async def test_backend_only_fields_never_reach_state(self) -> None:
         """Even if the LLM injects backend-only fields, they must be absent from state."""
-        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.graph.nodes.handover.field_extraction_node import field_extraction_node
 
         response = _llm_response(
             fields={
@@ -580,7 +580,7 @@ class TestFieldExtractionNode:
         state = _base_state(user_message="brand is Zara")
 
         with patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=_make_gateway_mock(response),
         ):
             result = await field_extraction_node(state)
@@ -593,7 +593,7 @@ class TestFieldExtractionNode:
     @pytest.mark.asyncio
     async def test_confidence_stored_alongside_value(self) -> None:
         """extracted_fields must carry both value and confidence for merge_state_node."""
-        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.graph.nodes.handover.field_extraction_node import field_extraction_node
 
         response = _llm_response(
             fields={"description": {"value": "Fit-out complete", "confidence": 0.88}}
@@ -601,7 +601,7 @@ class TestFieldExtractionNode:
         state = _base_state(user_message="description: Fit-out complete")
 
         with patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=_make_gateway_mock(response),
         ):
             result = await field_extraction_node(state)
@@ -613,7 +613,7 @@ class TestFieldExtractionNode:
     @pytest.mark.asyncio
     async def test_workflow_stage_passed_to_service(self) -> None:
         """workflow_stage from state is forwarded to the extraction service."""
-        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.graph.nodes.handover.field_extraction_node import field_extraction_node
 
         response = _llm_response(fields={})
         gateway = _make_gateway_mock(response)
@@ -623,7 +623,7 @@ class TestFieldExtractionNode:
         )
 
         with patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=gateway,
         ):
             await field_extraction_node(state)
@@ -644,14 +644,14 @@ class TestFieldExtractionWorkflowConfig:
     @pytest.mark.asyncio
     async def test_custom_system_prompt_used_when_workflow_config_present(self) -> None:
         """Node passes workflow_cfg.extraction_prompt to FieldExtractionService.extract()."""
-        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.graph.nodes.handover.field_extraction_node import field_extraction_node
         from app.agents.services.field_extraction_service import FieldExtractionService
         from app.agents.prompts.handover_extraction_prompt import HANDOVER_EXTRACTION_SYSTEM_PROMPT
         from app.agents.schemas.handover_schema import HandoverExtractedFields, ExtractionTraceMeta
 
         state = _base_state(
             user_message="custom workflow message",
-            active_agent="handover_service_request_agent",
+            active_agent="rdd_agent",
         )
 
         captured_kwargs: list[dict] = []
@@ -672,7 +672,7 @@ class TestFieldExtractionWorkflowConfig:
     @pytest.mark.asyncio
     async def test_falls_back_to_handover_prompt_when_no_active_agent(self) -> None:
         """active_agent=None → no WorkflowConfig → system_prompt=None → handover default."""
-        from app.agents.graph.nodes.field_extraction_node import field_extraction_node
+        from app.agents.graph.nodes.handover.field_extraction_node import field_extraction_node
         from app.agents.services.field_extraction_service import FieldExtractionService
         from app.agents.schemas.handover_schema import HandoverExtractedFields, ExtractionTraceMeta
 

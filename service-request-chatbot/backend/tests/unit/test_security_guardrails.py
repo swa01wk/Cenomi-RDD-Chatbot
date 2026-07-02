@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.agents.graph.nodes.api_submission_node import api_submission_node
-from app.agents.graph.nodes.merge_state_node import BACKEND_PROTECTED_FIELDS, merge_state_node
+from app.agents.graph.nodes.handover.api_submission_node import api_submission_node
+from app.agents.graph.nodes.handover.merge_state_node import BACKEND_PROTECTED_FIELDS, merge_state_node
 from app.core.injection_guard import scan_message
 
 

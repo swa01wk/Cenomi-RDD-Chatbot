@@ -31,11 +31,11 @@ from uuid import UUID
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.graph.helper_agent_graph import get_compiled_helper_graph
+from app.agents.graph.help_agent_graph import get_compiled_help_graph
 from app.types.chat import AuthContext
 
-# Backward-compat alias — tests patch app.services.chat_orchestration_service.get_compiled_graph
-get_compiled_graph = get_compiled_helper_graph
+# Tests patch app.services.chat_orchestration_service.get_compiled_graph
+get_compiled_graph = get_compiled_help_graph
 
 
 def _build_auth_context(role: str | None) -> AuthContext:
@@ -262,7 +262,7 @@ class ChatOrchestrationService:
         # 6. Invoke graph -------------------------------------------------------
         result_state: dict[str, Any]
         try:
-            graph = get_compiled_graph()
+            graph = get_compiled_help_graph()
             result_state = await graph.ainvoke(initial_state)
         except Exception as exc:
             log.exception(

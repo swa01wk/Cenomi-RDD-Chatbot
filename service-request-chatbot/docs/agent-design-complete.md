@@ -298,8 +298,8 @@ The state is a `TypedDict` with `total=False` — all keys are optional because 
 | `attachments` | `list[dict]` | — | File attachment metadata for this turn |
 | `trace_id` | `str` | ✓ (agent_traces) | Observability trace for this turn |
 | `conversation_history` | `list[dict]` | ✓ (chat_messages) | `[{"role": "user/assistant", "content": "..."}]` (last 10) |
-| `active_agent` | `str \| None` | ✓ (chat_sessions) | e.g. `"handover_service_request_agent"` |
-| `intent` | `str \| None` | ✓ (chat_sessions) | e.g. `"CREATE_HANDOVER_SERVICE_REQUEST"` |
+| `active_agent` | `str \| None` | ✓ (chat_sessions) | e.g. `"rdd_agent"` |
+| `intent` | `str \| None` | ✓ (chat_sessions) | e.g. `"CREATE_RDD_SERVICE_REQUEST"` |
 | `service_category` | `str \| None` | ✓ (draft) | e.g. `"FIT_OUT_AND_HANDOVER"` |
 | `sub_category` | `str \| None` | ✓ (draft) | e.g. `"HANDOVER"` |
 | `workflow_stage` | `str \| None` | ✓ (chat_sessions + draft) | `"CREATE_SR"` \| `"FM_REVIEW"` \| `"RDD_REVIEW"` \| `"SR_CREATED"` \| `"SR_COMPLETED"` |
@@ -406,9 +406,9 @@ The entry point for intent classification. Skipped when `active_agent` is alread
 ```python
 class SupervisorDecision(BaseModel):
     intent: Literal[
-        "CREATE_HANDOVER_SERVICE_REQUEST",
-        "UPDATE_HANDOVER_SERVICE_REQUEST",
-        "APPROVE_HANDOVER_SERVICE_REQUEST",
+        "CREATE_RDD_SERVICE_REQUEST",
+        "UPDATE_RDD_SERVICE_REQUEST",
+        "APPROVE_RDD_SERVICE_REQUEST",
         "CHECK_SERVICE_REQUEST_STATUS",
         "PREVIEW_SERVICE_REQUEST",
         "UNKNOWN",
@@ -437,8 +437,8 @@ Calls `lookup_agent(service_category, sub_category)` against `SERVICE_REQUEST_AG
 SERVICE_REQUEST_AGENT_REGISTRY = {
     "FIT_OUT_AND_HANDOVER": {
         "HANDOVER": {
-            "agent_name": "handover_service_request_agent",
-            "display_name": "Handover Service Request Agent",
+            "agent_name": "rdd_agent",
+            "display_name": "RDD Agent",
             "schema_key": "handover_service_request_schema",
         }
     }
@@ -664,7 +664,7 @@ All routing is implemented as pure Python functions in `app/agents/graph/service
 
 ```python
 _AGENT_ENTRY_NODES = {
-    "handover_service_request_agent": "handover_entry",
+    "rdd_agent": "handover_entry",
     # FM/RDD are routed by workflow_stage after sr_status_sync, not by active_agent
 }
 ```

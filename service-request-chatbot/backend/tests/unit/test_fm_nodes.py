@@ -31,9 +31,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.agents.graph.nodes.fm_api_submission_node import fm_api_submission_node
-from app.agents.graph.nodes.fm_payload_builder_node import fm_payload_builder_node
-from app.agents.graph.nodes.fm_review_entry_node import fm_review_entry_node
+from app.agents.graph.nodes.handover.fm_api_submission_node import fm_api_submission_node
+from app.agents.graph.nodes.handover.fm_payload_builder_node import fm_payload_builder_node
+from app.agents.graph.nodes.handover.fm_review_entry_node import fm_review_entry_node
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +219,7 @@ class TestFMApiSubmissionNode:
             error="server error",
         )
         with patch(
-            "app.agents.graph.nodes.fm_api_submission_node.get_service_request_api_service"
+            "app.agents.graph.nodes.handover.fm_api_submission_node.get_service_request_api_service"
         ) as mock_svc_factory:
             mock_svc = AsyncMock()
             mock_svc.patch_service_request = AsyncMock(return_value=mock_result)
@@ -246,7 +246,7 @@ class TestFMApiSubmissionNode:
             status_code=200,
         )
         with patch(
-            "app.agents.graph.nodes.fm_api_submission_node.get_service_request_api_service"
+            "app.agents.graph.nodes.handover.fm_api_submission_node.get_service_request_api_service"
         ) as mock_svc_factory:
             mock_svc = AsyncMock()
             mock_svc.patch_service_request = AsyncMock(return_value=mock_result)
@@ -275,7 +275,7 @@ class TestFMApiSubmissionNode:
             status_code=200,
         )
         with patch(
-            "app.agents.graph.nodes.fm_api_submission_node.get_service_request_api_service"
+            "app.agents.graph.nodes.handover.fm_api_submission_node.get_service_request_api_service"
         ) as mock_svc_factory:
             mock_svc = AsyncMock()
             mock_svc.patch_service_request = AsyncMock(return_value=mock_result)

@@ -26,7 +26,7 @@ from uuid import uuid4, UUID
 
 import pytest
 
-from app.agents.graph.service_request_graph import build_service_request_graph
+from app.agents.graph.help_agent_graph import build_help_agent_graph as build_service_request_graph
 from app.agents.schemas.supervisor_schema import SupervisorDecision
 from app.agents.services.lease_lookup_service import LeaseRecord, LeaseLookupResult
 from app.observability.trace_manager import TraceManager
@@ -93,11 +93,11 @@ def _make_trace_manager_with_mocked_repos() -> tuple[TraceManager, dict[str, Asy
 
 def _supervisor_decision_mock() -> AsyncMock:
     decision = SupervisorDecision(
-        intent="CREATE_HANDOVER_SERVICE_REQUEST",
+        intent="CREATE_RDD_SERVICE_REQUEST",
         confidence=0.92,
         service_category="FIT_OUT_AND_HANDOVER",
         sub_category="HANDOVER",
-        target_agent="handover_service_request_agent",
+        target_agent="rdd_agent",
         reasoning="Integration test",
     )
     return AsyncMock(return_value=(decision, 100, 60, 150))
@@ -208,10 +208,10 @@ async def test_trace_created_for_every_turn() -> None:
     stub_result: dict[str, Any] = {
         "response_message": "Please provide a lease code.",
         "status": "WAITING_FOR_USER",
-        "active_agent": "handover_service_request_agent",
+        "active_agent": "rdd_agent",
         "response_ui": {"type": "message"},
         "missing_fields": ["lease_code"],
-        "intent": "CREATE_HANDOVER_SERVICE_REQUEST",
+        "intent": "CREATE_RDD_SERVICE_REQUEST",
         "workflow_stage": "CREATE_SR",
     }
 
@@ -291,11 +291,11 @@ async def test_run_tree_created() -> None:
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _field_extraction_mock(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
     ):
@@ -326,11 +326,11 @@ async def test_llm_call_logged() -> None:
     tm, repos = _make_trace_manager_with_mocked_repos()
 
     decision = SupervisorDecision(
-        intent="CREATE_HANDOVER_SERVICE_REQUEST",
+        intent="CREATE_RDD_SERVICE_REQUEST",
         confidence=0.9,
         service_category="FIT_OUT_AND_HANDOVER",
         sub_category="HANDOVER",
-        target_agent="handover_service_request_agent",
+        target_agent="rdd_agent",
         reasoning="test",
     )
 
@@ -344,11 +344,11 @@ async def test_llm_call_logged() -> None:
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _field_extraction_mock(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
     ):
@@ -383,21 +383,21 @@ async def test_tool_call_logged() -> None:
 
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _field_extraction_mock(
                 {"lease_code": {"value": "LC-TRC-001", "confidence": 0.95}}
             ),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             _lease_service_mock([_sample_lease()]),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
     ):
@@ -405,7 +405,7 @@ async def test_tool_call_logged() -> None:
             _base_state(
                 trace_manager=tm,
                 user_message="Lease code is LC-TRC-001",
-                active_agent="handover_service_request_agent",
+                active_agent="rdd_agent",
                 collected_data={},
                 workflow_stage="CREATE_SR",
             )
@@ -438,15 +438,15 @@ async def test_state_persistence() -> None:
 
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _field_extraction_mock(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(model="gpt-4o-mini"),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
     ):
@@ -457,7 +457,7 @@ async def test_state_persistence() -> None:
                 "user_message": "what next?",
                 "trace_manager": tm,
                 "trace_id": str(uuid4()),
-                "active_agent": "handover_service_request_agent",
+                "active_agent": "rdd_agent",
                 "collected_data": {
                     "tenant_profile_id": 77,
                     "property_id": 2018,

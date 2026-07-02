@@ -62,7 +62,7 @@ All issues identified in the previous evaluation have been fixed. Below is a sum
 
 **Fix applied:**
 - [`nodes/supervisor_node.py`](../backend/app/agents/graph/nodes/supervisor_node.py): moved RBAC check into the supervisor node itself, returning `{"status": "WAITING_FOR_USER", "response_message": "Your role..."}` when intent is denied
-- [`helper_agent_graph.py`](../backend/app/agents/graph/helper_agent_graph.py): removed dead state mutation from routing function; routing is now side-effect-free
+- [`help_agent_graph.py`](../backend/app/agents/graph/help_agent_graph.py): removed dead state mutation from routing function; routing is now side-effect-free
 
 ### Other Fixes
 

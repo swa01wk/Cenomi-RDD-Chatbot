@@ -68,14 +68,14 @@ Backward-compat re-export stubs exist at all old paths — existing tests contin
 | `test_conversation_state_service.py` | `load` merging draft into state, `save_checkpoint` upsert logic |
 | `test_observability_*.py` | Repository methods, state diff, sanitization |
 
-### Helper Agent unit test status
+### Help Agent unit test status
 
 | File | Status | What it tests |
 |------|--------|--------------|
-| `test_helper_schema.py` | ✅ Exists | `intents_for_roles`, `ALL_INTENTS` from registry |
-| `test_helper_agent_graph.py` | ✅ Exists | `_route_after_*` routing predicates, RBAC, `_SR_ACTION_INTENTS` |
+| `test_help_agent_schema.py` | ✅ Exists | `intents_for_roles`, `ALL_INTENTS` from registry |
+| `test_help_agent_graph.py` | ✅ Exists | `_route_after_*` routing predicates, RBAC, `_SR_ACTION_INTENTS` |
 | `test_workflow_config.py` | ✅ Exists | `WorkflowConfig` registry, `get_workflow_config()`, `register_workflow()` |
-| `test_helper_schema.py` | ✅ Exists | `intents_for_roles`, role-to-intent mapping |
+| `test_help_agent_schema.py` | ✅ Exists | `intents_for_roles`, role-to-intent mapping |
 | `test_auth.py` | ❌ Missing | `hash_password`, `verify_password`, JWT issue + decode, expired token |
 | `test_user_repo.py` | ❌ Missing | `get_by_username` — found, not found, inactive user |
 
@@ -127,7 +127,7 @@ async def test_creates_draft(mock_session):
 
 ### Key fixture: `compiled_graph`
 
-The integration tests now use `get_compiled_helper_graph()` (the Helper Agent graph) rather than the old `get_compiled_graph()`. The helper graph includes the `faq_node` path and role-aware routing.
+The integration tests now use `get_compiled_help_graph()` (the Help Agent graph) rather than the old `get_compiled_graph()`. The helper graph includes the `faq_node` path and role-aware routing.
 
 ```python
 # tests/integration/conftest.py
@@ -138,13 +138,13 @@ def mock_llm_gateway():
     # For supervisor: use ASK_HELP for FAQ tests, CREATE_HANDOVER_SR for SR tests
     gateway.complete_json.return_value = (
         SupervisorDecision(
-            intent="CREATE_HANDOVER_SERVICE_REQUEST",
+            intent="CREATE_RDD_SERVICE_REQUEST",
             service_category="FIT_OUT_AND_HANDOVER",
             sub_category="HANDOVER",
             confidence=0.95,
             reasoning="User wants handover SR",
         ),
-        {"intent": "CREATE_HANDOVER_SERVICE_REQUEST", ...}
+        {"intent": "CREATE_RDD_SERVICE_REQUEST", ...}
     )
     return gateway
 
@@ -298,7 +298,7 @@ async def test_full_create_sr_happy_path(app_client, mock_llm, mock_lease_api, m
     })
     data = resp.json()
     session_id = data["session_id"]
-    assert data["active_agent"] == "handover_service_request_agent"
+    assert data["active_agent"] == "rdd_agent"
 
     # Turn 2: select lease
     resp = await app_client.post("/api/chat/service-request", json={
@@ -321,7 +321,7 @@ LLM calls are the most important mock because they introduce non-determinism. Th
 ```python
 mock_llm.complete_json.side_effect = [
     # First call: supervisor
-    (SupervisorDecision(intent="CREATE_HANDOVER_SERVICE_REQUEST", ...), {...}),
+    (SupervisorDecision(intent="CREATE_RDD_SERVICE_REQUEST", ...), {...}),
     # Second call: field extraction
     (HandoverExtractedFields(title="My request", ...), {...}),
 ]
@@ -391,7 +391,7 @@ SAMPLE_LEASE_DICT = {
 
 **`MINIMAL_SESSION`** — a `ChatSession` model instance in `active_agent=None` state for testing supervisor routing.
 
-**`ACTIVE_SESSION`** — a `ChatSession` model instance with `active_agent="handover_service_request_agent"` for testing handover-entry routing.
+**`ACTIVE_SESSION`** — a `ChatSession` model instance with `active_agent="rdd_agent"` for testing handover-entry routing.
 
 ### pytest markers
 
@@ -417,9 +417,9 @@ markers = [
 | Login (`POST /api/auth/login`) | ❌ `test_auth.py` | — | `test_handover_sr_e2e.py` | ✅ |
 | JWT validation + AuthContext | ❌ `test_auth.py` | — | — | — |
 | UserRepository | ❌ `test_user_repo.py` | — | — | — |
-| Helper schema / RBAC intents | ✅ `test_helper_schema.py` | — | — | ✅ Block 12 |
+| Helper schema / RBAC intents | ✅ `test_help_agent_schema.py` | — | — | ✅ Block 12 |
 | FAQ node | — | — | — | ✅ Blocks 1–2 |
-| Helper agent graph routing | ✅ `test_helper_agent_graph.py` | — | — | ✅ All blocks |
+| Helper agent graph routing | ✅ `test_help_agent_graph.py` | — | — | ✅ All blocks |
 | FM Review flow | ✅ `test_fm_review_e2e.py` | — | — | Next sprint |
 | RDD Review flow | ✅ `test_rdd_review_e2e.py` | — | — | Next sprint |
 | `sr_id` in request → `sr_status_sync` | — | — | — | — |
@@ -427,8 +427,8 @@ markers = [
 | **Lease `lease` field populated** | ❌ Missing | — | — | ✅ Blocks 3–5 |
 | **Property-scoped lease query** | ❌ Missing | — | — | ✅ (implicit) |
 | **Platform 401 retry** | ❌ Missing | — | — | — |
-| **Multi-workflow routing** | ✅ `test_helper_agent_graph.py` | — | — | — |
-| **`HelperIntent` as `str`** | ✅ `test_helper_schema.py` | — | — | — |
+| **Multi-workflow routing** | ✅ `test_help_agent_graph.py` | — | — | — |
+| **`HelperIntent` as `str`** | ✅ `test_help_agent_schema.py` | — | — | — |
 
 ---
 

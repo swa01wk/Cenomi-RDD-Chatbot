@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.agents.graph.service_request_graph import build_service_request_graph
+from app.agents.graph.help_agent_graph import build_help_agent_graph as build_service_request_graph
 from app.agents.schemas.supervisor_schema import SupervisorDecision
 from app.agents.services.lease_lookup_service import (
     LeaseRecord,
@@ -159,11 +159,11 @@ def _mock_lease_factory(matches: list[LeaseRecord], *, error: str | None = None)
 
 
 def _mock_supervisor_llm(
-    intent: str = "CREATE_HANDOVER_SERVICE_REQUEST",
+    intent: str = "CREATE_RDD_SERVICE_REQUEST",
     confidence: float = 0.9,
     service_category: str | None = "FIT_OUT_AND_HANDOVER",
     sub_category: str | None = "HANDOVER",
-    target_agent: str | None = "handover_service_request_agent",
+    target_agent: str | None = "rdd_agent",
 ) -> AsyncMock:
     """Return an ``AsyncMock`` for ``_call_supervisor_llm`` yielding a valid decision."""
     decision = SupervisorDecision(
@@ -218,11 +218,11 @@ async def test_first_user_message() -> None:
             return_value=MagicMock(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _mock_field_extraction_class(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(),
         ),
     ):
@@ -231,8 +231,8 @@ async def test_first_user_message() -> None:
         )
 
     # Supervisor + registry set the active agent
-    assert result["active_agent"] == "handover_service_request_agent"
-    assert result["intent"] == "CREATE_HANDOVER_SERVICE_REQUEST"
+    assert result["active_agent"] == "rdd_agent"
+    assert result["intent"] == "CREATE_RDD_SERVICE_REQUEST"
     # Lease lookup returns WAITING_FOR_USER because no identifiers were provided
     assert result["status"] == "WAITING_FOR_USER"
     assert result.get("response_message"), "Expected a non-empty response_message"
@@ -250,28 +250,28 @@ async def test_lease_code_provided() -> None:
     """
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _mock_field_extraction_class(
                 {"lease_code": {"value": "LC-2024-001", "confidence": 0.95}}
             ),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             _mock_lease_factory([_sample_lease_record()]),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
     ):
         result = await _GRAPH.ainvoke(
             _base_state(
                 user_message="The lease code is LC-2024-001",
-                active_agent="handover_service_request_agent",
+                active_agent="rdd_agent",
                 collected_data={},
                 workflow_stage="CREATE_SR",
             )
@@ -314,7 +314,7 @@ async def test_multiple_lease_selection() -> None:
 
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _mock_field_extraction_class(
                 {
                     "brand": {"value": "Zara", "confidence": 0.9},
@@ -323,18 +323,18 @@ async def test_multiple_lease_selection() -> None:
             ),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(),
         ),
         patch(
-            "app.agents.graph.nodes.lease_lookup_node.get_lease_lookup_service",
+            "app.agents.graph.nodes.shared.lease_lookup_node.get_lease_lookup_service",
             _mock_lease_factory([record_a, record_b]),
         ),
     ):
         result = await _GRAPH.ainvoke(
             _base_state(
                 user_message="Brand Zara",
-                active_agent="handover_service_request_agent",
+                active_agent="rdd_agent",
                 collected_data={},
                 workflow_stage="CREATE_SR",
             )
@@ -356,22 +356,22 @@ async def test_missing_fields() -> None:
     """
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _mock_field_extraction_class(),  # nothing new in user message
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
     ):
         result = await _GRAPH.ainvoke(
             _base_state(
                 user_message="ok, what next?",
-                active_agent="handover_service_request_agent",
+                active_agent="rdd_agent",
                 collected_data=_partial_fields(),
                 workflow_stage="CREATE_SR",
             )
@@ -406,22 +406,22 @@ async def test_validation_error() -> None:
 
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _mock_field_extraction_class(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[blocking_error]),
         ),
     ):
         result = await _GRAPH.ainvoke(
             _base_state(
                 user_message="continue",
-                active_agent="handover_service_request_agent",
+                active_agent="rdd_agent",
                 collected_data=_all_fields(),
                 workflow_stage="CREATE_SR",
             )
@@ -444,22 +444,22 @@ async def test_confirmation() -> None:
     """
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _mock_field_extraction_class(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
     ):
         result = await _GRAPH.ainvoke(
             _base_state(
                 user_message="continue",
-                active_agent="handover_service_request_agent",
+                active_agent="rdd_agent",
                 collected_data=_all_fields(),
                 workflow_stage="CREATE_SR",
             )
@@ -496,19 +496,19 @@ async def test_submission() -> None:
     """
     with (
         patch(
-            "app.agents.graph.nodes.field_extraction_node.FieldExtractionService",
+            "app.agents.graph.nodes.shared.field_extraction_node.FieldExtractionService",
             _mock_field_extraction_class(),
         ),
         patch(
-            "app.agents.graph.nodes.field_extraction_node.get_default_gateway",
+            "app.agents.graph.nodes.shared.field_extraction_node.get_default_gateway",
             return_value=MagicMock(),
         ),
         patch(
-            "app.agents.graph.nodes.validation_node._validation_service.validate_draft",
+            "app.agents.graph.nodes.shared.validation_node._validation_service.validate_draft",
             MagicMock(return_value=[]),
         ),
         patch(
-            "app.agents.graph.nodes.payload_builder_node.build_create_handover_payload",
+            "app.agents.graph.nodes.handover.payload_builder_node.build_create_handover_payload",
             MagicMock(
                 return_value={
                     "lease_id": 3001,
@@ -519,14 +519,14 @@ async def test_submission() -> None:
             ),
         ),
         patch(
-            "app.agents.graph.nodes.api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.api_submission_node.get_service_request_api_service",
             _mock_sr_api_factory("SR-2024-001"),
         ),
     ):
         result = await _GRAPH.ainvoke(
             _base_state(
                 user_message="yes",
-                active_agent="handover_service_request_agent",
+                active_agent="rdd_agent",
                 collected_data=_all_fields(),
                 workflow_stage="CREATE_SR",
                 confirmation_status="PENDING",  # state saved from prior confirmation turn

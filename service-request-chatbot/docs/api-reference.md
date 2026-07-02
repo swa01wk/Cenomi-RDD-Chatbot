@@ -57,7 +57,7 @@ Authorization: Bearer <token>   (optional)
 ```json
 {
   "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "active_agent": "handover_service_request_agent",
+  "active_agent": "rdd_agent",
   "message": "I found 2 leases for your account. Please select the one you'd like to use:",
   "ui": {
     "type": "lease_selection",
@@ -74,7 +74,7 @@ Authorization: Bearer <token>   (optional)
   },
   "state": {
     "workflow_stage": "CREATE_SR",
-    "intent": "CREATE_HANDOVER_SERVICE_REQUEST",
+    "intent": "CREATE_RDD_SERVICE_REQUEST",
     "missing_fields": ["selected_lease"],
     "collected_data": {}
   },
@@ -269,8 +269,8 @@ GET /api/observability/traces?session_id=<uuid>&agent=<agent_name>&status=<statu
       "id": "trace-uuid-1",
       "session_id": "session-uuid-1",
       "status": "SUCCESS",
-      "intent": "CREATE_HANDOVER_SERVICE_REQUEST",
-      "active_agent": "handover_service_request_agent",
+      "intent": "CREATE_RDD_SERVICE_REQUEST",
+      "active_agent": "rdd_agent",
       "workflow_stage_before": "CREATE_SR",
       "workflow_stage_after": "SR_CREATED",
       "total_latency_ms": 4200,
@@ -301,8 +301,8 @@ Returns full trace detail. Arrays are flat (not nested); the run tree is a separ
     "id": "trace-uuid-1",
     "session_id": "session-uuid-1",
     "status": "SUCCESS",
-    "intent": "CREATE_HANDOVER_SERVICE_REQUEST",
-    "active_agent": "handover_service_request_agent",
+    "intent": "CREATE_RDD_SERVICE_REQUEST",
+    "active_agent": "rdd_agent",
     "total_latency_ms": 4200,
     "total_token_count": 1840,
     "started_at": "2026-05-14T08:30:00Z",

@@ -1,4 +1,4 @@
-# Manual Testing Script — Mall Manager (Helper Agent & SR Chatbot)
+# Manual Testing Script — Mall Manager (Help Agent & SR Chatbot)
 
 > **Role:** Mall Manager  
 > **Login:** `aisha@cenomi.com` / `test1234`  

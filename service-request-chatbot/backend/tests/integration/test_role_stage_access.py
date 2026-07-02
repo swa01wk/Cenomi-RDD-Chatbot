@@ -26,9 +26,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.agents.graph.nodes.fm_review_entry_node import fm_review_entry_node
-from app.agents.graph.nodes.rdd_api_submission_node import rdd_api_submission_node
-from app.agents.graph.nodes.rdd_review_entry_node import rdd_review_entry_node
+from app.agents.graph.nodes.handover.fm_review_entry_node import fm_review_entry_node
+from app.agents.graph.nodes.handover.rdd_api_submission_node import rdd_api_submission_node
+from app.agents.graph.nodes.handover.rdd_review_entry_node import rdd_review_entry_node
 from app.agents.services.service_request_api_service import ServiceRequestCreationResult
 from app.types.chat import AuthContext
 
@@ -248,7 +248,7 @@ class TestRDDApiSubmitRoleAccess:
         state = _rdd_submit_api_state("DD_ENGINEER")
 
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(
                 submit_report=AsyncMock(
                     return_value=ServiceRequestCreationResult(
@@ -271,7 +271,7 @@ class TestRDDApiSubmitRoleAccess:
     async def test_fm_manager_cannot_submit_rdd_report(self) -> None:
         state = _rdd_submit_api_state("FM_MANAGER")
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(),
         ):
             result = await rdd_api_submission_node(state)
@@ -282,7 +282,7 @@ class TestRDDApiSubmitRoleAccess:
     async def test_operations_cannot_submit_rdd_report(self) -> None:
         state = _rdd_submit_api_state("OPERATIONS")
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(),
         ):
             result = await rdd_api_submission_node(state)
@@ -293,7 +293,7 @@ class TestRDDApiSubmitRoleAccess:
     async def test_mall_manager_cannot_submit_rdd_report(self) -> None:
         state = _rdd_submit_api_state("MALL_MANAGER")
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(),
         ):
             result = await rdd_api_submission_node(state)
@@ -313,7 +313,7 @@ class TestRDDApiFinalApproveRoleAccess:
     async def test_dd_engineer_can_final_approve(self) -> None:
         state = _rdd_final_approve_api_state("DD_ENGINEER")
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(patch_service_request=AsyncMock(return_value=_mock_patch_success())),
         ):
             result = await rdd_api_submission_node(state)
@@ -324,7 +324,7 @@ class TestRDDApiFinalApproveRoleAccess:
     async def test_fm_manager_cannot_final_approve(self) -> None:
         state = _rdd_final_approve_api_state("FM_MANAGER")
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(),
         ):
             result = await rdd_api_submission_node(state)
@@ -335,7 +335,7 @@ class TestRDDApiFinalApproveRoleAccess:
     async def test_operations_cannot_final_approve(self) -> None:
         state = _rdd_final_approve_api_state("OPERATIONS")
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(),
         ):
             result = await rdd_api_submission_node(state)
@@ -346,7 +346,7 @@ class TestRDDApiFinalApproveRoleAccess:
     async def test_mall_manager_cannot_final_approve(self) -> None:
         state = _rdd_final_approve_api_state("MALL_MANAGER")
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(),
         ):
             result = await rdd_api_submission_node(state)

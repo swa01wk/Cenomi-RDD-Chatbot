@@ -6,6 +6,11 @@ with the following adaptations:
 - Standard ``logging`` replaced with ``structlog.get_logger(__name__)``.
 - ``close()`` coroutine added for graceful ``httpx.AsyncClient`` shutdown.
 - Import paths updated to match this repo's layout.
+- Semantic reranking (``queryType=semantic``) removed — ``cenomi-help-index`` does
+  not define a named semantic configuration, so including it causes a 400 Bad Request.
+  Queries use hybrid BM25 keyword + dense vector search instead.
+- Language filter added: each sub-query scopes results to ``language eq '<lang>'``
+  so Arabic queries return Arabic documents and English queries return English documents.
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ log = structlog.get_logger(__name__)
 _QUERY_CONFIG: list[tuple[str, int]] = [
     ("help_content", 3),
     ("mall_info", 4),
-    ("key_contact", 2),
+    ("key_contact", 3),  # increased from 2: contact cards score lower than narrative docs
     ("event", 2),
 ]
 
@@ -134,17 +139,26 @@ class AzureSearchRepository:
         top_n: int,
         vector: list[float],
     ) -> list[SearchResult]:
-        """Execute a single hybrid search query for one source type."""
+        """Execute a single hybrid search query for one source type.
+
+        The ``lang`` parameter is applied as an OData filter on the ``language``
+        field so Arabic queries return Arabic-language documents and English
+        queries return English-language documents.  The index stores documents
+        in both ``"en"`` and ``"ar"`` variants; filtering prevents mixed-language
+        results from degrading the response quality.
+        """
         url = (
             f"{self._endpoint}/indexes/{self._index_name}"
             f"/docs/search?api-version=2023-11-01"
         )
+        # Hybrid search: BM25 keyword + dense vector similarity.
+        # Semantic reranking (queryType=semantic) is intentionally omitted — the
+        # cenomi-help-index does not have a named semantic configuration, so
+        # including semanticConfiguration causes a 400 Bad Request.
         body: dict[str, Any] = {
             "search": query,
             "top": top_n,
-            "filter": f"source_type eq '{source_type}'",
-            "queryType": "semantic",
-            "semanticConfiguration": "default",
+            "filter": f"source_type eq '{source_type}' and language eq '{lang}'",
             "vectorQueries": [
                 {
                     "kind": "vector",
@@ -201,13 +215,32 @@ class AzureSearchRepository:
 
     @staticmethod
     def _deduplicate(grouped: list[list[SearchResult]]) -> list[SearchResult]:
-        """Flatten and deduplicate by ``(source_type, title)`` pair."""
+        """Flatten, deduplicate, and interleave by source type.
+
+        Strategy: one round-robin pass guarantees at least one result per
+        non-empty source type before filling remaining slots in flat order.
+        This prevents high-volume source types (mall_info, help_content) from
+        crowding out low-volume types (key_contact, event) when the global
+        ``top_k`` cap is applied by the caller.
+        """
         seen: set[tuple[str, str]] = set()
         merged: list[SearchResult] = []
+
+        # Round 1: take the best result from each non-empty group in order.
         for group in grouped:
             for result in group:
                 key = (result.source_type, result.title)
                 if key not in seen:
                     seen.add(key)
                     merged.append(result)
+                    break  # one per group in round 1
+
+        # Round 2: fill in remaining results from all groups in flat order.
+        for group in grouped:
+            for result in group:
+                key = (result.source_type, result.title)
+                if key not in seen:
+                    seen.add(key)
+                    merged.append(result)
+
         return merged

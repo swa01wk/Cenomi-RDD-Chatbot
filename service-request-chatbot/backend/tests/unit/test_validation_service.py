@@ -703,7 +703,7 @@ class TestValidationServiceCompat:
 class TestValidationNode:
     @pytest.mark.asyncio
     async def test_returns_validation_errors_key(self) -> None:
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state = {"workflow_stage": "FM_REVIEW", "collected_data": {}}
         result = await validation_node(state)
@@ -711,7 +711,7 @@ class TestValidationNode:
 
     @pytest.mark.asyncio
     async def test_returns_status_key(self) -> None:
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state = {"workflow_stage": "FM_REVIEW", "collected_data": {}}
         result = await validation_node(state)
@@ -719,7 +719,7 @@ class TestValidationNode:
 
     @pytest.mark.asyncio
     async def test_status_in_progress_when_errors_exist(self) -> None:
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state = {"workflow_stage": "FM_REVIEW", "collected_data": {}}
         result = await validation_node(state)
@@ -727,7 +727,7 @@ class TestValidationNode:
 
     @pytest.mark.asyncio
     async def test_status_ready_to_submit_when_no_errors(self) -> None:
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state = {
             "workflow_stage": "FM_REVIEW",
@@ -741,7 +741,7 @@ class TestValidationNode:
 
     @pytest.mark.asyncio
     async def test_validation_errors_are_dicts(self) -> None:
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state = {"workflow_stage": "CREATE_SR", "collected_data": {}}
         result = await validation_node(state)
@@ -751,7 +751,7 @@ class TestValidationNode:
 
     @pytest.mark.asyncio
     async def test_each_error_has_canonical_keys(self) -> None:
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state = {"workflow_stage": "CREATE_SR", "collected_data": {}}
         result = await validation_node(state)
@@ -761,7 +761,7 @@ class TestValidationNode:
 
     @pytest.mark.asyncio
     async def test_documents_are_validated(self) -> None:
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state = {
             "workflow_stage": "FM_REVIEW",
@@ -780,7 +780,7 @@ class TestValidationNode:
 
     @pytest.mark.asyncio
     async def test_missing_collected_data_handled_gracefully(self) -> None:
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state: dict[str, Any] = {"workflow_stage": "FM_REVIEW"}
         result = await validation_node(state)
@@ -789,7 +789,7 @@ class TestValidationNode:
 
     @pytest.mark.asyncio
     async def test_missing_workflow_stage_defaults_to_create_sr(self) -> None:
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state: dict[str, Any] = {"collected_data": {}}
         result = await validation_node(state)
@@ -798,7 +798,7 @@ class TestValidationNode:
     @pytest.mark.asyncio
     async def test_only_failed_errors_in_state(self) -> None:
         """All entries in state.validation_errors must have status='FAILED'."""
-        from app.agents.graph.nodes.validation_node import validation_node
+        from app.agents.graph.nodes.handover.validation_node import validation_node
 
         state = {"workflow_stage": "CREATE_SR", "collected_data": {}}
         result = await validation_node(state)

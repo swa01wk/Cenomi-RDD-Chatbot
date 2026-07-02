@@ -20,7 +20,7 @@ _route_after_validation:
 _route_after_supervisor:
   - ASK_HELP → faq_node
   - UNKNOWN → faq_node
-  - CREATE_HANDOVER_SERVICE_REQUEST → registry
+  - CREATE_RDD_SERVICE_REQUEST → registry
   - Unregistered intent → faq_node (safe fallback)
   - PREVIEW_SERVICE_REQUEST → preview
 """
@@ -32,7 +32,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.agents.graph.helper_agent_graph import (
+from app.agents.graph.help_agent_graph import (
     _route_after_sync,
     _route_after_validation,
     _route_after_supervisor,
@@ -49,12 +49,12 @@ def _state(**kwargs: Any) -> dict[str, Any]:
     base: dict[str, Any] = {
         "session_id": "test-session-001",
         "user_id": "test-user-001",
-        "active_agent": "handover_service_request_agent",
+        "active_agent": "rdd_agent",
         "workflow_stage": "CREATE_SR",
         "collected_data": {},
         "validation_errors": [],
         "status": "IN_PROGRESS",
-        "intent": "CREATE_HANDOVER_SERVICE_REQUEST",
+        "intent": "CREATE_RDD_SERVICE_REQUEST",
         "backend_refs": {},
     }
     base.update(kwargs)
@@ -88,7 +88,7 @@ class TestRouteAfterSync:
         assert result == "supervisor"
 
     def test_create_sr_with_active_agent_uses_entry_nodes(self) -> None:
-        state = _state(workflow_stage="CREATE_SR", active_agent="handover_service_request_agent")
+        state = _state(workflow_stage="CREATE_SR", active_agent="rdd_agent")
         result = _route_after_sync(state)
         # CREATE_SR is not in stage_sync_nodes; falls through to _AGENT_ENTRY_NODES
         assert result == "handover_entry"
@@ -185,7 +185,7 @@ class TestRouteAfterValidation:
 
 
 # ---------------------------------------------------------------------------
-# _route_after_supervisor — HelperIntent as str
+# _route_after_supervisor — HelpAgentIntent as str
 # ---------------------------------------------------------------------------
 
 
@@ -201,7 +201,7 @@ class TestRouteAfterSupervisor:
         assert result == "faq_node"
 
     def test_create_handover_routes_to_registry(self) -> None:
-        state = _state(intent="CREATE_HANDOVER_SERVICE_REQUEST", status="IN_PROGRESS")
+        state = _state(intent="CREATE_RDD_SERVICE_REQUEST", status="IN_PROGRESS")
         result = _route_after_supervisor(state)
         assert result == "registry"
 
@@ -224,7 +224,7 @@ class TestRouteAfterSupervisor:
         assert result == "faq_node"
 
     def test_waiting_for_user_routes_to_response_generation(self) -> None:
-        state = _state(intent="CREATE_HANDOVER_SERVICE_REQUEST", status="WAITING_FOR_USER")
+        state = _state(intent="CREATE_RDD_SERVICE_REQUEST", status="WAITING_FOR_USER")
         result = _route_after_supervisor(state)
         assert result == "response_generation"
 
@@ -236,10 +236,10 @@ class TestRouteAfterSupervisor:
 
 class TestSRActionIntentsDerived:
     def test_create_handover_is_action_intent(self) -> None:
-        assert "CREATE_HANDOVER_SERVICE_REQUEST" in _SR_ACTION_INTENTS
+        assert "CREATE_RDD_SERVICE_REQUEST" in _SR_ACTION_INTENTS
 
     def test_approve_handover_is_action_intent(self) -> None:
-        assert "APPROVE_HANDOVER_SERVICE_REQUEST" in _SR_ACTION_INTENTS
+        assert "APPROVE_RDD_SERVICE_REQUEST" in _SR_ACTION_INTENTS
 
     def test_ask_help_is_not_action_intent(self) -> None:
         assert "ASK_HELP" not in _SR_ACTION_INTENTS

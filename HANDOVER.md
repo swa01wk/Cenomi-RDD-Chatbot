@@ -362,9 +362,9 @@ The graph is compiled once at startup via `get_compiled_graph()` and reused. It 
 #### Supervisor intents
 
 `SupervisorDecision` in `supervisor_schema.py`:
-- `CREATE_HANDOVER_SERVICE_REQUEST`
-- `UPDATE_HANDOVER_SERVICE_REQUEST`
-- `APPROVE_HANDOVER_SERVICE_REQUEST`
+- `CREATE_RDD_SERVICE_REQUEST`
+- `UPDATE_RDD_SERVICE_REQUEST`
+- `APPROVE_RDD_SERVICE_REQUEST`
 - `CHECK_SERVICE_REQUEST_STATUS`
 - `PREVIEW_SERVICE_REQUEST`
 - `UNKNOWN`
@@ -373,7 +373,7 @@ The graph is compiled once at startup via `get_compiled_graph()` and reused. It 
 
 `SERVICE_REQUEST_AGENT_REGISTRY` in `agents/registries/service_request_registry.py`
 
-Currently one entry: `("FIT_OUT_AND_HANDOVER", "HANDOVER")` → `handover_service_request_agent`
+Currently one entry: `("FIT_OUT_AND_HANDOVER", "HANDOVER")` → `rdd_agent`
 
 ### 6.5 Services layer
 
@@ -673,7 +673,7 @@ This drives 9 scenarios from `docs/e2e-test-guide.md` against the real running b
 
 **Fix applied (June 2026):**
 - RBAC check moved into `supervisor_node.py` — returns `{"status": "WAITING_FOR_USER", "response_message": "Your role..."}` when intent is denied
-- `helper_agent_graph.py`: routing function is now side-effect-free; reads `status == "WAITING_FOR_USER"` only
+- `help_agent_graph.py`: routing function is now side-effect-free; reads `status == "WAITING_FOR_USER"` only
 
 ---
 

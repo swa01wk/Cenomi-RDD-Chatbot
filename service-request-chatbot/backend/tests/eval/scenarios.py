@@ -470,7 +470,7 @@ _S8 = Scenario(
         ),
         Turn(
             message="create a new handover",
-            note="Intent classified as CREATE_HANDOVER_SERVICE_REQUEST; bot asks for lease identifier",
+            note="Intent classified as CREATE_RDD_SERVICE_REQUEST; bot asks for lease identifier",
             expect_keywords=["lease", "code", "brand", "mall"],
         ),
         Turn(

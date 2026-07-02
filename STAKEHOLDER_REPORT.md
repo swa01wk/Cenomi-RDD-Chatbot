@@ -23,7 +23,7 @@
 12. [Documentation Produced](#12-documentation-produced)
 13. [Technology Stack](#13-technology-stack)
 14. [Known Gaps & Remaining Work](#14-known-gaps--remaining-work)
-15. [The Helper Agent System](#15-the-helper-agent-system)
+15. [The Help Agent System](#15-the-helper-agent-system)
 16. [Key Design Principles](#16-key-design-principles)
 
 ---
@@ -81,7 +81,7 @@ The project began with:
 | **Jun 6, 2026** | `f68a68e` — *RDD agent (docs)* | Comprehensive documentation update — architecture, agent-design, extensibility-guide, handover-workflow, security-guardrails all updated to reflect full FM/RDD scope. |
 | **Jun 18, 2026** | `3c62119` — *RDD life cycle* | **Full lifecycle completion** — RDD final-approve flow, expected handover date auto-computation, document upload node fully wired, role-permission map, HANDOVER.md developer handover document (1,100+ lines), FM/RDD e2e integration tests (743 lines), role-stage access tests, frontend stage UI components (LifecycleStepper, StageActions, StageContextPanel, DocumentUploadPanel, RoleSelector). |
 | **Jun 18, 2026** | `28cfca2` — *Arch docs* | Architecture and agent-design docs updated to reflect complete multi-stage system. |
-| **Jun 26, 2026** | `f9a57c4` — *Extensions* | **Multi-workflow scaling refactor** — `WorkflowConfig` registry, field-extraction per-workflow prompt injection, data-driven helper-agent graph routing, helper schema decoupled (`HelperIntent = str`), 76 new tests added (workflow_config, helper_agent_graph, helper_schema), RDD lifecycle doc (`rdd-lifecycle.md`), role-stage access integration test suite (354 lines). |
+| **Jun 26, 2026** | `f9a57c4` — *Extensions* | **Multi-workflow scaling refactor** — `WorkflowConfig` registry, field-extraction per-workflow prompt injection, data-driven helper-agent graph routing, helper schema decoupled (`HelperIntent = str`), 76 new tests added (workflow_config, help_agent_graph, help_agent_schema), RDD lifecycle doc (`rdd-lifecycle.md`), role-stage access integration test suite (354 lines). |
 
 ---
 
@@ -215,7 +215,7 @@ backend/app/
 │   ├── schemas/
 │   │   ├── handover_schema.py           ← StageDefinition, STAGE_REGISTRY, field lists
 │   │   ├── supervisor_schema.py         ← SupervisorDecision Pydantic model
-│   │   └── helper_schema.py             ← HelperIntent, RBAC intent map
+│   │   └── help_agent_schema.py             ← HelperIntent, RBAC intent map
 │   ├── registries/
 │   │   ├── service_request_registry.py  ← Agent registry (service_category × sub_category)
 │   │   └── workflow_config.py           ← WorkflowConfig extensibility registry
@@ -307,8 +307,8 @@ backend/app/
 The Mall Manager opens the chat and describes a handover request.
 
 **Flow:**
-1. Supervisor classifies intent → `CREATE_HANDOVER_SERVICE_REQUEST`
-2. Registry maps `FIT_OUT_AND_HANDOVER × HANDOVER` → `handover_service_request_agent`
+1. Supervisor classifies intent → `CREATE_RDD_SERVICE_REQUEST`
+2. Registry maps `FIT_OUT_AND_HANDOVER × HANDOVER` → `rdd_agent`
 3. LLM extracts fields; backend protects `property_id`, `brand_id`, `lease_id`, `title` (cannot be overwritten by LLM)
 4. Lease lookup resolves brand/mall/unit from single lease code
 5. Validation checks required fields (`description`, `startDate`, `endDate`, `inspection_done_by`)
@@ -325,7 +325,7 @@ The Mall Manager opens the chat and describes a handover request.
 The FM Manager opens a separate chat session with the existing SR ID.
 
 **Flow:**
-1. Supervisor classifies → `APPROVE_HANDOVER_SERVICE_REQUEST` with FM role
+1. Supervisor classifies → `APPROVE_RDD_SERVICE_REQUEST` with FM role
 2. SR status sync node validates SR is in `IN_PROCESS` (FM stage)
 3. FM Manager uploads required document (FM checklist PDF/image)
 4. FM Manager provides `unit_readiness_date`, `expected_handover_date`
@@ -488,7 +488,7 @@ Seventeen technical documentation files totalling approximately **12,000 lines**
 |----------|---------|----------------|
 | `HANDOVER.md` (root) | Complete developer handover guide — setup, architecture, integration, gaps | 1,170 |
 | `docs/agent-design-complete.md` | Complete node-by-node reference — all 20+ nodes, routing, state schema, LLM calls | 1,424 |
-| `docs/helper-agent-pipeline.md` | Helper Agent design — all 4 workflows, RBAC, lifecycle, API reference | 1,714 |
+| `docs/help-agent-pipeline.md` | Help Agent design — all 4 workflows, RBAC, lifecycle, API reference | 1,714 |
 | `docs/architecture.md` | System architecture — frontend/backend contract, DB schema, integration diagram | 432 |
 | `docs/handover-workflow.md` | CREATE_SR / FM_REVIEW / RDD_REVIEW stage definitions, payload shapes, sequence diagrams | 365 |
 | `docs/security-guardrails.md` | All 5 security layers with code examples | 241 |
@@ -564,15 +564,15 @@ All gaps are documented in detail in `HANDOVER.md` Section 13 and `gaps_and_pc/c
 
 ---
 
-## 15. The Helper Agent System
+## 15. The Help Agent System
 
-The **Helper Agent** is the unified conversational AI entry point for all users on the Cenomi Mall Management Platform. It wraps the entire SR Chatbot pipeline — adding role-aware authentication, a FAQ layer, and an intelligent supervisor that serves every role through a single endpoint.
+The **Help Agent** is the unified conversational AI entry point for all users on the Cenomi Mall Management Platform. It wraps the entire SR Chatbot pipeline — adding role-aware authentication, a FAQ layer, and an intelligent supervisor that serves every role through a single endpoint.
 
 ---
 
-### 15.1 What the Helper Agent Does
+### 15.1 What the Help Agent Does
 
-Every user interaction — regardless of role — is routed through one FastAPI service. The Helper Agent decides what to do based on who is asking and what they said:
+Every user interaction — regardless of role — is routed through one FastAPI service. The Help Agent decides what to do based on who is asking and what they said:
 
 ```
 User logs in → JWT issued with role + property IDs
@@ -585,7 +585,7 @@ User logs in → JWT issued with role + property IDs
       → Field collection, lease resolution, validation, confirmation, API submission
 ```
 
-The Helper Agent is **not a separate service** — the LangGraph supervisor node IS the Helper Agent. There is no separate routing layer; the supervisor and the graph are the same thing.
+The Help Agent is **not a separate service** — the LangGraph supervisor node IS the Help Agent. There is no separate routing layer; the supervisor and the graph are the same thing.
 
 ---
 
@@ -628,13 +628,13 @@ PostgreSQL  ·  Redis  ·  OpenAI  ·  Cenomi Platform API
 
 ### 15.3 The Four Workflows
 
-The Helper Agent supports four distinct workflows through the same graph:
+The Help Agent supports four distinct workflows through the same graph:
 
 | # | Workflow | Trigger intent | Roles | Description |
 |---|---------|----------------|-------|-------------|
 | 1 | **FAQ** | `ASK_HELP` or `UNKNOWN` | All roles | Answers any platform question from embedded knowledge |
-| 2 | **CREATE_SR** | `CREATE_HANDOVER_SERVICE_REQUEST` | MALL_MANAGER, ADMIN | Creates a new Handover SR end-to-end |
-| 3 | **FM_REVIEW** | `APPROVE_HANDOVER_SERVICE_REQUEST` | FM_MANAGER, OPERATIONS, ADMIN | FM Manager reviews SR, uploads docs, approves |
+| 2 | **CREATE_SR** | `CREATE_RDD_SERVICE_REQUEST` | MALL_MANAGER, ADMIN | Creates a new Handover SR end-to-end |
+| 3 | **FM_REVIEW** | `APPROVE_RDD_SERVICE_REQUEST` | FM_MANAGER, OPERATIONS, ADMIN | FM Manager reviews SR, uploads docs, approves |
 | 4 | **RDD_REVIEW** | Stage-detected via `sr_status_sync` | DD_ENGINEER, ADMIN | DD Engineer submits RDD report and gives final approval |
 
 ---
@@ -732,7 +732,7 @@ The FAQ workflow is the **default path** — all ambiguous messages, questions, 
 
 ### 15.7 Workflow 2 — CREATE_SR (Mall Manager)
 
-Full details covered in Section 8. Key Helper Agent additions:
+Full details covered in Section 8. Key Help Agent additions:
 
 - **Role gate:** Only `MALL_MANAGER` (or `ADMIN`) can trigger this workflow — `FM_MANAGER` attempting to create an SR receives a role-denial message, no draft is created
 - **Lease scoping:** `unique_property_ids` from the JWT are passed to the Lease API query — the user can only see leases for their authorised malls
@@ -750,7 +750,7 @@ Full details covered in Section 8. Key Helper Agent additions:
 
 ### 15.8 Workflow 3 — FM_REVIEW (FM Manager / Operations)
 
-Full details covered in Section 8. Key Helper Agent additions:
+Full details covered in Section 8. Key Help Agent additions:
 
 **Trigger mechanism — `sr_status_sync` node:**
 ```
@@ -781,7 +781,7 @@ fm_review_entry (role guard: FM_MANAGER or OPERATIONS ✓)
 
 ### 15.9 Workflow 4 — RDD_REVIEW (DD Engineer)
 
-Full details covered in Section 8. Key Helper Agent additions:
+Full details covered in Section 8. Key Help Agent additions:
 
 **Trigger mechanism:**
 ```
@@ -850,7 +850,7 @@ DD Engineer (DD_ENGINEER)
 
 ### 15.11 Graph Node Map (26 Nodes)
 
-The full Helper Agent graph has 26 nodes organised into 6 layers:
+The full Help Agent graph has 26 nodes organised into 6 layers:
 
 | Layer | Nodes |
 |-------|-------|
@@ -869,7 +869,7 @@ The full Helper Agent graph has 26 nodes organised into 6 layers:
 
 ### 15.12 RBAC — Seven Independent Enforcement Layers
 
-The Helper Agent enforces RBAC at 7 independent checkpoints. No single layer is trusted alone; all must pass:
+The Help Agent enforces RBAC at 7 independent checkpoints. No single layer is trusted alone; all must pass:
 
 | Layer | Where | What It Checks |
 |-------|-------|---------------|

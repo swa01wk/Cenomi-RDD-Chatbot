@@ -621,7 +621,7 @@ class TestCallCapture:
             model="gpt-4o-mini",
             temperature=Decimal("0.7"),
             estimated_cost=Decimal("0.0015"),
-            structured_output={"intent": "CREATE_HANDOVER_SERVICE_REQUEST"},
+            structured_output={"intent": "CREATE_RDD_SERVICE_REQUEST"},
         )
 
         kw = repos["llm"].create.call_args.kwargs

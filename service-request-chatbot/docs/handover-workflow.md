@@ -39,8 +39,8 @@ sequenceDiagram
     Guard-->>Chat: clean
     Chat->>Graph: ainvoke(initial_state)
     Graph->>Graph: load_session_node (no draft yet)
-    Graph->>Graph: supervisor_node → CREATE_HANDOVER_SERVICE_REQUEST
-    Graph->>Graph: registry_node → handover_service_request_agent
+    Graph->>Graph: supervisor_node → CREATE_RDD_SERVICE_REQUEST
+    Graph->>Graph: registry_node → rdd_agent
     Graph->>Graph: field_extraction_node (minimal data)
     Graph->>Graph: merge_state_node
     Graph->>Lease: lease_lookup_node (GET /leases?user_id=...)

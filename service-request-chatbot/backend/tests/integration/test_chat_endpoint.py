@@ -47,7 +47,7 @@ _RESULT_SESSION_ID = uuid4()
 def _make_result(
     *,
     session_id: UUID | None = None,
-    active_agent: str = "handover_service_request_agent",
+    active_agent: str = "rdd_agent",
     message: str = "Please provide the brand name.",
     workflow_stage: str = "COLLECTING_FIELDS",
     missing_fields: list[str] | None = None,
@@ -128,7 +128,7 @@ async def test_new_session_returns_200_with_correct_schema() -> None:
     body = resp.json()
 
     assert body["session_id"] == str(_RESULT_SESSION_ID)
-    assert body["active_agent"] == "handover_service_request_agent"
+    assert body["active_agent"] == "rdd_agent"
     assert body["message"] == "Please provide the brand name."
     assert body["trace_id"] == str(_TRACE_ID)
 

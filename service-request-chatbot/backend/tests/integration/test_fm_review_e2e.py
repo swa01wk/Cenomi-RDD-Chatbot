@@ -21,10 +21,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.agents.graph.nodes.document_upload_node import document_upload_node
-from app.agents.graph.nodes.fm_api_submission_node import fm_api_submission_node
-from app.agents.graph.nodes.fm_payload_builder_node import fm_payload_builder_node
-from app.agents.graph.nodes.fm_review_entry_node import fm_review_entry_node
-from app.agents.graph.nodes.merge_state_node import merge_state_node
+from app.agents.graph.nodes.handover.fm_api_submission_node import fm_api_submission_node
+from app.agents.graph.nodes.handover.fm_payload_builder_node import fm_payload_builder_node
+from app.agents.graph.nodes.handover.fm_review_entry_node import fm_review_entry_node
+from app.agents.graph.nodes.handover.merge_state_node import merge_state_node
 from app.agents.services.service_request_api_service import ServiceRequestCreationResult
 from app.types.chat import AuthContext
 
@@ -234,7 +234,7 @@ class TestFMApiSubmissionWithDocuments:
         state["collected_data"]["expected_handover_date"] = "2026-06-25"
 
         with patch(
-            "app.agents.graph.nodes.fm_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.fm_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(
                 patch_service_request=AsyncMock(return_value=_mock_patch_success())
             ),
@@ -251,7 +251,7 @@ class TestFMApiSubmissionWithDocuments:
         state["backend_refs"]["fm_action"] = "approve"
 
         with patch(
-            "app.agents.graph.nodes.fm_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.fm_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(),
         ):
             result = await fm_api_submission_node(state)
@@ -297,7 +297,7 @@ class TestFMFullChainedPipeline:
 
         # 4. Submit to platform
         with patch(
-            "app.agents.graph.nodes.fm_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.fm_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(
                 patch_service_request=AsyncMock(return_value=_mock_patch_success())
             ),

@@ -175,7 +175,7 @@ ALL_DOCUMENT_TYPES: frozenset[str] = frozenset(
 # Fields whose values are derived from other collected data by merge_state_node.
 # These are never asked of the user directly.
 # Re-exported here so that tests and services can import from the schema module.
-from app.agents.graph.nodes.handover.merge_state_node import BACKEND_COMPUTED_FIELDS  # noqa: E402
+from app.agents.graph.nodes.shared.merge_state_node import BACKEND_COMPUTED_FIELDS  # noqa: E402
 
 # ── Permission map: role → stages the role may act on ────────────────────────
 

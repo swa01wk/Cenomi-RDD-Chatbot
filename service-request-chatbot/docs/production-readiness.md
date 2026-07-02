@@ -1,7 +1,7 @@
 # Agent Pipeline — Production Readiness Assessment
 
 > **Date:** July 2026  
-> **Scope:** Full Helper Agent pipeline — HTTP layer → LangGraph graph → LLM gateway → persistence → observability  
+> **Scope:** Full Help Agent pipeline — HTTP layer → LangGraph graph → LLM gateway → persistence → observability  
 > **Verdict:** Architecture and patterns are production-grade. Seven critical gaps must be closed before a live deployment. Fifteen operational hardening items should follow shortly after.
 
 ---
@@ -29,7 +29,7 @@ flowchart TD
     ORCH["ChatOrchestrationService\n(turn lifecycle)"]
     GRAPH["LangGraph ainvoke"]
 
-    subgraph graphNodes ["Helper Agent Graph (26 nodes)"]
+    subgraph graphNodes ["Help Agent Graph (26 nodes)"]
         LOAD["load_session_node\n(restore draft from DB)"]
         SYNC["sr_status_sync_node\n(fetch platform SR status)"]
         SUP["supervisor_node\n(intent classification + RBAC)"]
@@ -328,7 +328,7 @@ If the JWT claim contains non-integer values, this raises `ValueError` which pro
 
 ### S8. Session continuity bypasses supervisor RBAC re-check on follow-up turns
 
-**File:** `app/agents/graph/helper_agent_graph.py`
+**File:** `app/agents/graph/help_agent_graph.py`
 
 When `active_agent` is set in session state, `_route_after_supervisor` skips the supervisor node entirely. If the user's JWT role changes between turns (e.g. role demoted mid-session), the old RBAC decision is honoured until the session is cleared.
 
@@ -406,7 +406,7 @@ The guard uses regex substring matching with a hardcoded threshold. It has no Un
 | N6 | No FK: `chat_sessions.user_id → users.id` — orphan rows possible | `db/models.py` |
 | N7 | Full user messages stored in `agent_traces` with no retention policy — PII growth | `db/models.py` |
 | N8 | Terminal paths (SUBMITTED/FAILED) still trigger the response_generation LLM call | `response_generation_node.py` |
-| N9 | `compiled_graph` singleton not refreshed on hot reload in dev | `helper_agent_graph.py` |
+| N9 | `compiled_graph` singleton not refreshed on hot reload in dev | `help_agent_graph.py` |
 | N10 | `LLM_BASE_URL` / `temperature` hardcoded in `LLMGateway.from_settings()` — not all settings wired | `gateway.py` |
 | N11 | Legacy `ObservabilityTrace` table alongside `AgentTrace` — simplify ops/migrations | `db/models.py` |
 | N12 | No gunicorn / process-manager guidance for production deployment | `pyproject.toml` |

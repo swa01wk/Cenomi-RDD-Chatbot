@@ -214,7 +214,7 @@ graph TD
 
 ## LangGraph Architecture
 
-The main graph is defined in `app/agents/graph/helper_agent_graph.py` and compiled once as a singleton (`get_compiled_helper_graph()`). `service_request_graph.py` is a backward-compat re-export stub that delegates to the helper graph.
+The main graph is defined in `app/agents/graph/help_agent_graph.py` and compiled once as a singleton (`get_compiled_help_graph()`). `service_request_graph.py` is a backward-compat re-export stub that delegates to the helper graph.
 
 The helper graph adds a **FAQ path** (ASK_HELP / UNKNOWN intent → `faq_node` → `response_generation`) and **RBAC enforcement** in `supervisor_node` on top of the core SR workflow nodes.
 

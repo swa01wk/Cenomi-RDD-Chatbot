@@ -139,7 +139,7 @@ ORDER BY asd.created_at;
 ```json
 {
   "added": {
-    "intent": "CREATE_HANDOVER_SERVICE_REQUEST",
+    "intent": "CREATE_RDD_SERVICE_REQUEST",
     "service_category": "FIT_OUT_AND_HANDOVER"
   },
   "removed": {},

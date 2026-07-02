@@ -431,8 +431,8 @@ Hi, I need to raise a handover request for my unit
 
 **What happens:**
 1. The injection guard scans the message (clean).
-2. The supervisor LLM classifies intent as `CREATE_HANDOVER_SERVICE_REQUEST` with confidence > 0.6.
-3. The registry maps `(FIT_OUT_AND_HANDOVER, HANDOVER)` → `handover_service_request_agent`.
+2. The supervisor LLM classifies intent as `CREATE_RDD_SERVICE_REQUEST` with confidence > 0.6.
+3. The registry maps `(FIT_OUT_AND_HANDOVER, HANDOVER)` → `rdd_agent`.
 4. The chatbot responds warmly and asks for the tenant's lease/unit details.
 
 **Talking point:**

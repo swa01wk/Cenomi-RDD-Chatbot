@@ -68,9 +68,9 @@ The Supervisor is the backend's entry point for **intent identification**. It ru
 ```python
 class SupervisorDecision(BaseModel):
     intent: Literal[
-        "CREATE_HANDOVER_SERVICE_REQUEST",
-        "UPDATE_HANDOVER_SERVICE_REQUEST",
-        "APPROVE_HANDOVER_SERVICE_REQUEST",
+        "CREATE_RDD_SERVICE_REQUEST",
+        "UPDATE_RDD_SERVICE_REQUEST",
+        "APPROVE_RDD_SERVICE_REQUEST",
         "CHECK_SERVICE_REQUEST_STATUS",
         "PREVIEW_SERVICE_REQUEST",
         "UNKNOWN",
@@ -103,7 +103,7 @@ The registry maps `(service_category, sub_category)` pairs to a concrete agent n
 ```python
 SERVICE_REQUEST_AGENT_REGISTRY = {
     ("FIT_OUT_AND_HANDOVER", "HANDOVER"): {
-        "agent_name": "handover_service_request_agent",
+        "agent_name": "rdd_agent",
         "schema_key": "handover_service_request_schema",
     },
     # Additional entries for future service categories
@@ -123,7 +123,7 @@ The registry is the **deterministic source of truth for agent routing**. The fro
 
 ## Handover Agent
 
-The handover agent is not a separate class — it is the collection of nodes that execute once `active_agent = "handover_service_request_agent"` is set. These nodes share the `HandoverExtractedFields` schema and the `CREATE_SR_STAGE` configuration.
+The handover agent is not a separate class — it is the collection of nodes that execute once `active_agent = "rdd_agent"` is set. These nodes share the `HandoverExtractedFields` schema and the `CREATE_SR_STAGE` configuration.
 
 **`handover_entry_node`** (`app/agents/graph/nodes/handover_entry_node.py`):
 
@@ -185,8 +185,8 @@ class ServiceRequestGraphState(TypedDict, total=False):
     conversation_history: list[dict]  # recent chat history [{role, content}, ...]
 
     # Routing
-    active_agent: str | None      # e.g. "handover_service_request_agent"
-    intent: str | None            # e.g. "CREATE_HANDOVER_SERVICE_REQUEST"
+    active_agent: str | None      # e.g. "rdd_agent"
+    intent: str | None            # e.g. "CREATE_RDD_SERVICE_REQUEST"
     workflow_stage: str | None    # e.g. "CREATE_SR", "SR_CREATED"
     status: str | None            # "IN_PROGRESS" | "WAITING_FOR_USER" | "READY_TO_SUBMIT"
                                   # | "SUBMITTED" | "COMPLETED" | "FAILED"
@@ -247,7 +247,7 @@ All routing is implemented as pure functions in `service_request_graph.py`. No L
 
 ```python
 _AGENT_ENTRY_NODES = {
-    "handover_service_request_agent": "handover_entry",
+    "rdd_agent": "handover_entry",
     # FM/RDD are stage-routed by workflow_stage after sr_status_sync, not by active_agent key
 }
 ```

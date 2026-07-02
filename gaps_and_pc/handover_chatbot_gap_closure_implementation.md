@@ -903,10 +903,10 @@ Required registry:
 
 ```python
 PAYLOAD_BUILDERS = {
-    ("handover_service_request_agent", "CREATE_SR", "create"): build_create_handover_payload,
-    ("handover_service_request_agent", "FM_REVIEW", "save_progress"): build_fm_review_save_progress_payload,
-    ("handover_service_request_agent", "FM_REVIEW", "approve"): build_fm_review_approve_payload,
-    ("handover_service_request_agent", "RDD_REVIEW", "submit_report"): build_rdd_report_submission_payload,
+    ("rdd_agent", "CREATE_SR", "create"): build_create_handover_payload,
+    ("rdd_agent", "FM_REVIEW", "save_progress"): build_fm_review_save_progress_payload,
+    ("rdd_agent", "FM_REVIEW", "approve"): build_fm_review_approve_payload,
+    ("rdd_agent", "RDD_REVIEW", "submit_report"): build_rdd_report_submission_payload,
 }
 ```
 
@@ -926,7 +926,7 @@ Required dynamic routing:
 
 ```python
 _AGENT_ENTRY_NODES = {
-    "handover_service_request_agent": "handover_entry",
+    "rdd_agent": "handover_entry",
 }
 ```
 
@@ -934,9 +934,9 @@ For stage-specific routing:
 
 ```python
 _STAGE_ENTRY_NODES = {
-    ("handover_service_request_agent", "CREATE_SR"): "handover_entry",
-    ("handover_service_request_agent", "FM_REVIEW"): "fm_review_entry",
-    ("handover_service_request_agent", "RDD_REVIEW"): "rdd_review_entry",
+    ("rdd_agent", "CREATE_SR"): "handover_entry",
+    ("rdd_agent", "FM_REVIEW"): "fm_review_entry",
+    ("rdd_agent", "RDD_REVIEW"): "rdd_review_entry",
 }
 ```
 
@@ -958,15 +958,15 @@ Required registry:
 
 ```python
 EXTRACTION_REGISTRY = {
-    ("handover_service_request_agent", "CREATE_SR"): {
+    ("rdd_agent", "CREATE_SR"): {
         "schema": HandoverCreateExtractedFields,
         "prompt": HANDOVER_CREATE_EXTRACTION_PROMPT,
     },
-    ("handover_service_request_agent", "FM_REVIEW"): {
+    ("rdd_agent", "FM_REVIEW"): {
         "schema": HandoverFMReviewExtractedFields,
         "prompt": HANDOVER_FM_REVIEW_EXTRACTION_PROMPT,
     },
-    ("handover_service_request_agent", "RDD_REVIEW"): {
+    ("rdd_agent", "RDD_REVIEW"): {
         "schema": HandoverRDDReviewExtractedFields,
         "prompt": HANDOVER_RDD_REVIEW_EXTRACTION_PROMPT,
     },

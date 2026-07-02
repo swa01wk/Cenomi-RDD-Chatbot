@@ -20,11 +20,11 @@ from app.agents.services.lease_lookup_service import LeaseRecord, LeaseLookupRes
 
 
 def make_supervisor_mock(
-    intent: str = "CREATE_HANDOVER_SERVICE_REQUEST",
+    intent: str = "CREATE_RDD_SERVICE_REQUEST",
     confidence: float = 0.92,
     service_category: str | None = "FIT_OUT_AND_HANDOVER",
     sub_category: str | None = "HANDOVER",
-    target_agent: str | None = "handover_service_request_agent",
+    target_agent: str | None = "rdd_agent",
 ) -> AsyncMock:
     """Return an AsyncMock for ``_call_supervisor_llm`` with a deterministic decision."""
     decision = SupervisorDecision(

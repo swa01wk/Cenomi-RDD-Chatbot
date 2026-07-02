@@ -30,7 +30,7 @@ from typing import Any
 
 import pytest
 
-from app.agents.graph.nodes.merge_state_node import _add_days, merge_state_node
+from app.agents.graph.nodes.handover.merge_state_node import _add_days, merge_state_node
 from app.agents.schemas.handover_schema import (
     BACKEND_COMPUTED_FIELDS,
     FM_REVIEW_STAGE,

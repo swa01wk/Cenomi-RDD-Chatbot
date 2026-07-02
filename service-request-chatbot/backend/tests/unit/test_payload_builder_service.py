@@ -432,7 +432,7 @@ class TestPayloadBuilderServiceClass:
 class TestPayloadBuilderNodeIntegration:
     @pytest.mark.asyncio
     async def test_node_stores_payload_in_backend_refs(self) -> None:
-        from app.agents.graph.nodes.payload_builder_node import payload_builder_node
+        from app.agents.graph.nodes.handover.payload_builder_node import payload_builder_node
 
         state: dict[str, Any] = {
             "collected_data": _full_data(),
@@ -444,7 +444,7 @@ class TestPayloadBuilderNodeIntegration:
 
     @pytest.mark.asyncio
     async def test_node_payload_has_correct_structure(self) -> None:
-        from app.agents.graph.nodes.payload_builder_node import payload_builder_node
+        from app.agents.graph.nodes.handover.payload_builder_node import payload_builder_node
 
         state: dict[str, Any] = {
             "collected_data": _full_data(),
@@ -459,7 +459,7 @@ class TestPayloadBuilderNodeIntegration:
 
     @pytest.mark.asyncio
     async def test_node_returns_failed_status_on_missing_keys(self) -> None:
-        from app.agents.graph.nodes.payload_builder_node import payload_builder_node
+        from app.agents.graph.nodes.handover.payload_builder_node import payload_builder_node
 
         state: dict[str, Any] = {
             "collected_data": {},
@@ -470,7 +470,7 @@ class TestPayloadBuilderNodeIntegration:
 
     @pytest.mark.asyncio
     async def test_node_skips_non_create_sr_stages(self) -> None:
-        from app.agents.graph.nodes.payload_builder_node import payload_builder_node
+        from app.agents.graph.nodes.handover.payload_builder_node import payload_builder_node
 
         state: dict[str, Any] = {
             "collected_data": _full_data(),
@@ -481,7 +481,7 @@ class TestPayloadBuilderNodeIntegration:
 
     @pytest.mark.asyncio
     async def test_node_preserves_existing_backend_refs(self) -> None:
-        from app.agents.graph.nodes.payload_builder_node import payload_builder_node
+        from app.agents.graph.nodes.handover.payload_builder_node import payload_builder_node
 
         state: dict[str, Any] = {
             "collected_data": _full_data(),
@@ -494,7 +494,7 @@ class TestPayloadBuilderNodeIntegration:
 
     @pytest.mark.asyncio
     async def test_node_defaults_to_create_sr_when_stage_absent(self) -> None:
-        from app.agents.graph.nodes.payload_builder_node import payload_builder_node
+        from app.agents.graph.nodes.handover.payload_builder_node import payload_builder_node
 
         state: dict[str, Any] = {"collected_data": _full_data()}
         result = await payload_builder_node(state)

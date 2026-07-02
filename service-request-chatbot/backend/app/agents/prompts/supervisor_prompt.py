@@ -1,8 +1,13 @@
-"""Supervisor routing prompt.
+"""Supervisor routing prompt for the Help Agent.
 
 The LLM must classify user intent and return ONLY valid JSON matching
 ``SupervisorDecision``.  It must not collect form fields, validate data,
 or submit service requests.
+
+Intent taxonomy follows the agent taxonomy:
+  - help_agent        : supervisor (this prompt) + FAQ Q&A
+  - rdd_agent         : full RDD lifecycle (CREATE_SR → FM_REVIEW → RDD_REVIEW)
+  - work_permit_agent : single-stage work permit SR creation
 
 ``CONFIDENCE_THRESHOLD`` is the minimum confidence below which the supervisor
 requests clarification instead of routing.
@@ -39,17 +44,23 @@ VALID INTENTS
                 any question not related to performing a specific SR action.
       This is the DEFAULT intent. When in doubt, use ASK_HELP.
 
-  CREATE_HANDOVER_SERVICE_REQUEST
-      User wants to raise / create a new handover service request.
+  CREATE_RDD_SERVICE_REQUEST
+      User wants to raise / create a new RDD handover service request.
       Keywords: create, raise, submit, open, new, initiate, start handover
 
-  UPDATE_HANDOVER_SERVICE_REQUEST
-      User wants to modify or update an existing handover service request.
+  UPDATE_RDD_SERVICE_REQUEST
+      User wants to modify or update an existing RDD handover service request.
       Keywords: update, change, edit, modify, amend handover
 
-  APPROVE_HANDOVER_SERVICE_REQUEST
-      User wants to approve, reject, or review a handover service request.
+  APPROVE_RDD_SERVICE_REQUEST
+      User wants to approve, reject, or review an RDD handover service request.
       Keywords: approve, reject, review, sign off, accept, decline handover
+
+  CREATE_WORK_PERMIT_SR
+      User wants to create a work permit service request for construction,
+      maintenance, roof access, or operational work in their unit.
+      Keywords: work permit, hot work, cold work, roof access, construction permit,
+                maintenance permit, operations permit, permit for work, I need a permit
 
   CHECK_SERVICE_REQUEST_STATUS
       User wants to know the current status of a service request.
@@ -76,20 +87,25 @@ When intent = ASK_HELP:
     sub_category     = null
     target_agent     = null
 
-When intent = CREATE_HANDOVER_SERVICE_REQUEST:
+When intent = CREATE_RDD_SERVICE_REQUEST:
     service_category = "FIT_OUT_AND_HANDOVER"
     sub_category     = "HANDOVER"
-    target_agent     = "handover_service_request_agent"
+    target_agent     = "rdd_agent"
 
-When intent = UPDATE_HANDOVER_SERVICE_REQUEST:
+When intent = UPDATE_RDD_SERVICE_REQUEST:
     service_category = "FIT_OUT_AND_HANDOVER"
     sub_category     = "HANDOVER"
-    target_agent     = "handover_service_request_agent"
+    target_agent     = "rdd_agent"
 
-When intent = APPROVE_HANDOVER_SERVICE_REQUEST:
+When intent = APPROVE_RDD_SERVICE_REQUEST:
     service_category = "FIT_OUT_AND_HANDOVER"
     sub_category     = "HANDOVER"
-    target_agent     = "handover_service_request_agent"
+    target_agent     = "rdd_agent"
+
+When intent = CREATE_WORK_PERMIT_SR:
+    service_category = "WORK_PERMIT"
+    sub_category     = "WORK_PERMIT"
+    target_agent     = "work_permit_agent"
 
 When intent = CHECK_SERVICE_REQUEST_STATUS:
     service_category = null

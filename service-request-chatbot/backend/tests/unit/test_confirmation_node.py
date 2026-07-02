@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from app.agents.graph.nodes.confirmation_node import (
+from app.agents.graph.nodes.handover.confirmation_node import (
     _CONFIRMATION_DISPLAY_FIELDS,
     _build_confirmation_card,
     confirmation_node,

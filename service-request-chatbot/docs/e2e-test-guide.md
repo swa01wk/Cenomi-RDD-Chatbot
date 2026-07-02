@@ -1,4 +1,4 @@
-# End-to-End Test Guide — Helper Agent (Handover Service Request)
+# End-to-End Test Guide — Help Agent (Handover Service Request)
 
 > **Environment:** Both `LEASE_TENANT_API_BASE_URL` and `SERVICE_REQUEST_API_BASE_URL` are empty in `.env`,
 > so the **mock adapters** are active. No external APIs are required.
@@ -25,8 +25,8 @@
 | **Authentication** | No login — `user_id` sent in request body only | **Login required** — `POST /api/auth/login` issues a JWT. Every chat request must include `Authorization: Bearer <token>`. `user_id` from the body is a fallback only. |
 | **Q&A / FAQ** | Off-topic questions fell through to SR clarification prompt | **FAQ node** — `ASK_HELP` intent routes to a dedicated FAQ node that answers platform questions via an embedded FAQ prompt. No SR workflow activated. |
 | **Role-based routing** | No RBAC — any user could trigger any intent | **RBAC enforced** — each role has a permitted intent set. FM Manager cannot create SRs; Mall Manager cannot do FM approval. Mismatches get a role-appropriate explanation. |
-| **FM Review** | FM review was Postman-only (Phase 2 API calls) | **FM Review is now chatbot-driven** — FM Manager opens the SR with `sr_id`, the Helper Agent detects `FM_REVIEW` stage via `sr_status_sync`, and drives the review workflow. |
-| **RDD Review** | RDD review was Postman-only (Phase 3 API calls) | **RDD Review is now chatbot-driven** — DD Engineer opens the SR with `sr_id`, the Helper Agent detects `RDD_REVIEW` stage, and drives the report submission. |
+| **FM Review** | FM review was Postman-only (Phase 2 API calls) | **FM Review is now chatbot-driven** — FM Manager opens the SR with `sr_id`, the Help Agent detects `FM_REVIEW` stage via `sr_status_sync`, and drives the review workflow. |
+| **RDD Review** | RDD review was Postman-only (Phase 3 API calls) | **RDD Review is now chatbot-driven** — DD Engineer opens the SR with `sr_id`, the Help Agent detects `RDD_REVIEW` stage, and drives the report submission. |
 | **`sr_id` in request body** | Not supported | New `sr_id` field — FM Manager and DD Engineer pass it when opening an existing SR from a notification or SR list. |
 | **Title field** | Bot asked user for a title (Turn 3 in old happy path) | Title is **auto-generated** — `handover-{lease_code}-{description_slug}`. The bot never asks for it; the LLM is explicitly forbidden from extracting it. |
 | **Multi-field extraction** | Bot collected exactly one field per turn | Bot now extracts **all fields mentioned in a single message** — e.g. start date + end date + inspector in one reply. |

@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.agents.schemas.supervisor_schema import SupervisorDecision
-from app.agents.registries.service_request_registry import (
+from app.agents.registry import (
     SERVICE_REQUEST_AGENT_REGISTRY,
     is_registered,
     list_registered_agents,
@@ -37,11 +37,11 @@ from app.agents.registries.service_request_registry import (
 # ---------------------------------------------------------------------------
 
 def _make_decision(
-    intent: str = "CREATE_HANDOVER_SERVICE_REQUEST",
+    intent: str = "CREATE_RDD_SERVICE_REQUEST",
     confidence: float = 0.9,
     service_category: str | None = "FIT_OUT_AND_HANDOVER",
     sub_category: str | None = "HANDOVER",
-    target_agent: str | None = "handover_service_request_agent",
+    target_agent: str | None = "rdd_agent",
     reasoning: str = "User wants to create a handover SR",
 ) -> SupervisorDecision:
     return SupervisorDecision(
@@ -72,11 +72,11 @@ def _base_state(**overrides: Any) -> dict[str, Any]:
 class TestSupervisorDecisionModel:
     def test_valid_create_intent(self) -> None:
         d = _make_decision()
-        assert d.intent == "CREATE_HANDOVER_SERVICE_REQUEST"
+        assert d.intent == "CREATE_RDD_SERVICE_REQUEST"
         assert d.confidence == 0.9
         assert d.service_category == "FIT_OUT_AND_HANDOVER"
         assert d.sub_category == "HANDOVER"
-        assert d.target_agent == "handover_service_request_agent"
+        assert d.target_agent == "rdd_agent"
 
     def test_valid_unknown_intent(self) -> None:
         d = _make_decision(
@@ -91,9 +91,9 @@ class TestSupervisorDecisionModel:
 
     def test_all_valid_intents(self) -> None:
         valid_intents = [
-            "CREATE_HANDOVER_SERVICE_REQUEST",
-            "UPDATE_HANDOVER_SERVICE_REQUEST",
-            "APPROVE_HANDOVER_SERVICE_REQUEST",
+            "CREATE_RDD_SERVICE_REQUEST",
+            "UPDATE_RDD_SERVICE_REQUEST",
+            "APPROVE_RDD_SERVICE_REQUEST",
             "CHECK_SERVICE_REQUEST_STATUS",
             "UNKNOWN",
         ]
@@ -146,14 +146,14 @@ class TestServiceRequestRegistry:
 
     def test_handover_agent_config(self) -> None:
         cfg = SERVICE_REQUEST_AGENT_REGISTRY["FIT_OUT_AND_HANDOVER"]["HANDOVER"]
-        assert cfg["agent_name"] == "handover_service_request_agent"
-        assert cfg["display_name"] == "Handover Service Request Agent"
+        assert cfg["agent_name"] == "rdd_agent"
+        assert cfg["display_name"] == "RDD Agent"
         assert cfg["schema_key"] == "handover_service_request_schema"
 
     def test_lookup_agent_found(self) -> None:
         cfg = lookup_agent("FIT_OUT_AND_HANDOVER", "HANDOVER")
         assert cfg is not None
-        assert cfg["agent_name"] == "handover_service_request_agent"
+        assert cfg["agent_name"] == "rdd_agent"
 
     def test_lookup_agent_missing_category(self) -> None:
         assert lookup_agent("UNKNOWN_CATEGORY", "HANDOVER") is None
@@ -173,7 +173,7 @@ class TestServiceRequestRegistry:
     def test_list_registered_agents_returns_all(self) -> None:
         agents = list_registered_agents()
         names = [a["agent_name"] for a in agents]
-        assert "handover_service_request_agent" in names
+        assert "rdd_agent" in names
 
     def test_list_registered_agents_non_empty(self) -> None:
         assert len(list_registered_agents()) >= 1
@@ -193,7 +193,7 @@ class TestSupervisorSessionContinuity:
         from app.agents.graph.nodes.supervisor_node import supervisor_node
 
         state = _base_state(
-            active_agent="handover_service_request_agent",
+            active_agent="rdd_agent",
             user_message="What's next?",
         )
 
@@ -204,19 +204,19 @@ class TestSupervisorSessionContinuity:
             result = await supervisor_node(state)
 
         mock_llm.assert_not_called()
-        assert result["active_agent"] == "handover_service_request_agent"
+        assert result["active_agent"] == "rdd_agent"
 
     @pytest.mark.asyncio
     async def test_cancel_phrase_triggers_reclassification(self) -> None:
         from app.agents.graph.nodes.supervisor_node import supervisor_node
 
         decision = _make_decision(
-            intent="CREATE_HANDOVER_SERVICE_REQUEST",
+            intent="CREATE_RDD_SERVICE_REQUEST",
             confidence=0.85,
         )
 
         state = _base_state(
-            active_agent="handover_service_request_agent",
+            active_agent="rdd_agent",
             user_message="cancel, I want to start over with a different request",
         )
 
@@ -231,7 +231,7 @@ class TestSupervisorSessionContinuity:
             result = await supervisor_node(state)
 
         mock_llm.assert_called_once()
-        assert result.get("intent") == "CREATE_HANDOVER_SERVICE_REQUEST"
+        assert result.get("intent") == "CREATE_RDD_SERVICE_REQUEST"
 
     @pytest.mark.asyncio
     async def test_nevermind_triggers_reclassification(self) -> None:
@@ -239,7 +239,7 @@ class TestSupervisorSessionContinuity:
 
         decision = _make_decision(intent="UNKNOWN", confidence=0.1)
         state = _base_state(
-            active_agent="handover_service_request_agent",
+            active_agent="rdd_agent",
             user_message="nevermind",
         )
 
@@ -299,10 +299,10 @@ class TestSupervisorRouting:
         ):
             result = await supervisor_node(state)
 
-        assert result["intent"] == "CREATE_HANDOVER_SERVICE_REQUEST"
+        assert result["intent"] == "CREATE_RDD_SERVICE_REQUEST"
         assert result["service_category"] == "FIT_OUT_AND_HANDOVER"
         assert result["sub_category"] == "HANDOVER"
-        assert result["active_agent"] == "handover_service_request_agent"
+        assert result["active_agent"] == "rdd_agent"
         assert result["status"] == "IN_PROGRESS"
 
     @pytest.mark.asyncio
@@ -337,7 +337,7 @@ class TestSupervisorRouting:
         from app.agents.graph.nodes.supervisor_node import supervisor_node
 
         decision = _make_decision(
-            intent="UPDATE_HANDOVER_SERVICE_REQUEST",
+            intent="UPDATE_RDD_SERVICE_REQUEST",
             confidence=0.8,
             service_category=None,
             sub_category=None,
@@ -355,7 +355,7 @@ class TestSupervisorRouting:
         ):
             result = await supervisor_node(state)
 
-        assert result["intent"] == "UPDATE_HANDOVER_SERVICE_REQUEST"
+        assert result["intent"] == "UPDATE_RDD_SERVICE_REQUEST"
         assert result["status"] == "IN_PROGRESS"
 
     @pytest.mark.asyncio
@@ -389,7 +389,7 @@ class TestSupervisorRouting:
         from app.agents.graph.nodes.supervisor_node import supervisor_node
 
         decision = _make_decision(
-            intent="APPROVE_HANDOVER_SERVICE_REQUEST",
+            intent="APPROVE_RDD_SERVICE_REQUEST",
             confidence=0.9,
             service_category=None,
             sub_category=None,
@@ -407,7 +407,7 @@ class TestSupervisorRouting:
         ):
             result = await supervisor_node(state)
 
-        assert result["intent"] == "APPROVE_HANDOVER_SERVICE_REQUEST"
+        assert result["intent"] == "APPROVE_RDD_SERVICE_REQUEST"
         assert result["status"] == "IN_PROGRESS"
 
 
@@ -422,7 +422,7 @@ class TestSupervisorClarification:
         from app.agents.graph.nodes.supervisor_node import supervisor_node
 
         decision = _make_decision(
-            intent="CREATE_HANDOVER_SERVICE_REQUEST",
+            intent="CREATE_RDD_SERVICE_REQUEST",
             confidence=0.4,  # below threshold of 0.6
         )
         state = _base_state(user_message="I need some help")
@@ -583,21 +583,21 @@ class TestSupervisorLLMFailure:
 class TestRegistryNode:
     @pytest.mark.asyncio
     async def test_valid_routing_resolves_agent(self) -> None:
-        from app.agents.graph.nodes.registry_node import registry_node
+        from app.agents.graph.nodes.shared.registry_node import registry_node
 
         state = _base_state(
             service_category="FIT_OUT_AND_HANDOVER",
             sub_category="HANDOVER",
-            active_agent="handover_service_request_agent",
+            active_agent="rdd_agent",
         )
         result = await registry_node(state)
 
-        assert result["active_agent"] == "handover_service_request_agent"
+        assert result["active_agent"] == "rdd_agent"
         assert result["status"] == "IN_PROGRESS"
 
     @pytest.mark.asyncio
     async def test_missing_service_category_returns_clarification(self) -> None:
-        from app.agents.graph.nodes.registry_node import registry_node
+        from app.agents.graph.nodes.shared.registry_node import registry_node
 
         state = _base_state(service_category=None, sub_category="HANDOVER")
         result = await registry_node(state)
@@ -607,7 +607,7 @@ class TestRegistryNode:
 
     @pytest.mark.asyncio
     async def test_missing_sub_category_returns_clarification(self) -> None:
-        from app.agents.graph.nodes.registry_node import registry_node
+        from app.agents.graph.nodes.shared.registry_node import registry_node
 
         state = _base_state(service_category="FIT_OUT_AND_HANDOVER", sub_category=None)
         result = await registry_node(state)
@@ -617,7 +617,7 @@ class TestRegistryNode:
 
     @pytest.mark.asyncio
     async def test_unknown_routing_returns_clarification(self) -> None:
-        from app.agents.graph.nodes.registry_node import registry_node
+        from app.agents.graph.nodes.shared.registry_node import registry_node
 
         state = _base_state(
             service_category="UNKNOWN_CATEGORY",
@@ -631,7 +631,7 @@ class TestRegistryNode:
     @pytest.mark.asyncio
     async def test_registry_overrides_mismatched_supervisor_agent(self) -> None:
         """Registry is authoritative — it should override a wrong supervisor choice."""
-        from app.agents.graph.nodes.registry_node import registry_node
+        from app.agents.graph.nodes.shared.registry_node import registry_node
 
         state = _base_state(
             service_category="FIT_OUT_AND_HANDOVER",
@@ -640,12 +640,12 @@ class TestRegistryNode:
         )
         result = await registry_node(state)
 
-        assert result["active_agent"] == "handover_service_request_agent"
+        assert result["active_agent"] == "rdd_agent"
         assert result["status"] == "IN_PROGRESS"
 
     @pytest.mark.asyncio
     async def test_registry_node_does_not_include_form_fields(self) -> None:
-        from app.agents.graph.nodes.registry_node import registry_node
+        from app.agents.graph.nodes.shared.registry_node import registry_node
 
         state = _base_state(
             service_category="FIT_OUT_AND_HANDOVER",
@@ -658,7 +658,7 @@ class TestRegistryNode:
 
     @pytest.mark.asyncio
     async def test_registry_node_no_active_agent_in_state(self) -> None:
-        from app.agents.graph.nodes.registry_node import registry_node
+        from app.agents.graph.nodes.shared.registry_node import registry_node
 
         state = _base_state(
             service_category="FIT_OUT_AND_HANDOVER",
@@ -666,7 +666,7 @@ class TestRegistryNode:
         )
         result = await registry_node(state)
 
-        assert result["active_agent"] == "handover_service_request_agent"
+        assert result["active_agent"] == "rdd_agent"
         assert result["status"] == "IN_PROGRESS"
 
 
@@ -677,8 +677,8 @@ class TestRegistryNode:
 
 class TestRegistryExport:
     def test_registry_node_re_exports_registry_constant(self) -> None:
-        from app.agents.graph.nodes.registry_node import SERVICE_REQUEST_AGENT_REGISTRY
-        from app.agents.registries.service_request_registry import (
+        from app.agents.registry import SERVICE_REQUEST_AGENT_REGISTRY
+        from app.agents.registry import (
             SERVICE_REQUEST_AGENT_REGISTRY as SOURCE,
         )
 

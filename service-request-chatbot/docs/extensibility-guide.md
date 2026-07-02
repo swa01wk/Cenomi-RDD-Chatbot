@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document captures the extensibility analysis of the current architecture for adding new agents similar to the Handover Service Request Agent — including the planned FM Review and RDD Review workflow stages.
+This document captures the extensibility analysis of the current architecture for adding new agents similar to the RDD Agent — including the planned FM Review and RDD Review workflow stages.
 
 ---
 
@@ -34,8 +34,8 @@ The registry maps `(service_category, sub_category)` pairs to an `AgentConfig`. 
 SERVICE_REQUEST_AGENT_REGISTRY = {
     "FIT_OUT_AND_HANDOVER": {
         "HANDOVER": {
-            "agent_name": "handover_service_request_agent",
-            "display_name": "Handover Service Request Agent",
+            "agent_name": "rdd_agent",
+            "display_name": "RDD Agent",
             "schema_key": "handover_service_request_schema",
         },
         # Add new entries here, e.g.:
@@ -86,9 +86,9 @@ The `@trace_node(run_name, run_type)` decorator is fully generic. Any new node g
 
 ```python
 intent: Literal[
-    "CREATE_HANDOVER_SERVICE_REQUEST",
-    "UPDATE_HANDOVER_SERVICE_REQUEST",
-    "APPROVE_HANDOVER_SERVICE_REQUEST",
+    "CREATE_RDD_SERVICE_REQUEST",
+    "UPDATE_RDD_SERVICE_REQUEST",
+    "APPROVE_RDD_SERVICE_REQUEST",
     "CHECK_SERVICE_REQUEST_STATUS",
     "PREVIEW_SERVICE_REQUEST",
     "UNKNOWN",
@@ -105,7 +105,7 @@ The dispatch dict exists in the codebase:
 
 ```python
 _AGENT_ENTRY_NODES: dict[str, str] = {
-    "handover_service_request_agent": "handover_entry",
+    "rdd_agent": "handover_entry",
     # FM/RDD are stage-routed by workflow_stage after sr_status_sync
 }
 ```

@@ -41,10 +41,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.agents.graph.nodes.rdd_api_submission_node import rdd_api_submission_node
-from app.agents.graph.nodes.rdd_payload_builder_node import rdd_payload_builder_node
-from app.agents.graph.nodes.rdd_review_entry_node import rdd_review_entry_node
-from app.agents.graph.nodes.sr_status_sync_node import sr_status_sync_node
+from app.agents.graph.nodes.handover.rdd_api_submission_node import rdd_api_submission_node
+from app.agents.graph.nodes.handover.rdd_payload_builder_node import rdd_payload_builder_node
+from app.agents.graph.nodes.handover.rdd_review_entry_node import rdd_review_entry_node
+from app.agents.graph.nodes.shared.sr_status_sync_node import sr_status_sync_node
 from app.agents.services.payload_builder_service import (
     build_rdd_approve_payload,
     build_rdd_report_payload,
@@ -310,7 +310,7 @@ class TestRDDApiSubmissionFinalApprove:
         mock_svc.submit_report = AsyncMock()
 
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=mock_svc,
         ):
             await rdd_api_submission_node(state)
@@ -327,7 +327,7 @@ class TestRDDApiSubmissionFinalApprove:
         state = _state(backend_refs=backend_refs, auth=_dd_engineer_auth())
 
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(patch_service_request=AsyncMock(return_value=_mock_patch_success())),
         ):
             result = await rdd_api_submission_node(state)
@@ -344,7 +344,7 @@ class TestRDDApiSubmissionFinalApprove:
         state = _state(backend_refs=backend_refs, auth=_dd_engineer_auth())
 
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(patch_service_request=AsyncMock(return_value=_mock_patch_success())),
         ):
             result = await rdd_api_submission_node(state)
@@ -360,7 +360,7 @@ class TestRDDApiSubmissionFinalApprove:
         state = _state(backend_refs=backend_refs, auth=_dd_engineer_auth())
 
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(patch_service_request=AsyncMock(return_value=_mock_patch_failure())),
         ):
             result = await rdd_api_submission_node(state)
@@ -377,7 +377,7 @@ class TestRDDApiSubmissionFinalApprove:
         state = _state(backend_refs=backend_refs, auth=_fm_manager_auth())
 
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(),
         ):
             result = await rdd_api_submission_node(state)
@@ -401,7 +401,7 @@ class TestRDDApiSubmissionPhase3a:
         state = _state(backend_refs=backend_refs)
 
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(submit_report=AsyncMock(return_value=_mock_submit_success())),
         ):
             result = await rdd_api_submission_node(state)
@@ -419,7 +419,7 @@ class TestRDDApiSubmissionPhase3a:
         state = _state(backend_refs=backend_refs)
 
         with patch(
-            "app.agents.graph.nodes.rdd_api_submission_node.get_service_request_api_service",
+            "app.agents.graph.nodes.handover.rdd_api_submission_node.get_service_request_api_service",
             return_value=AsyncMock(submit_report=AsyncMock(return_value=_mock_submit_success())),
         ):
             result = await rdd_api_submission_node(state)
@@ -458,7 +458,7 @@ class TestSRStatusSyncRddStatus:
             status_code=200,
         )
         with patch(
-            "app.agents.graph.nodes.sr_status_sync_node.get_service_request_api_service",
+            "app.agents.graph.nodes.shared.sr_status_sync_node.get_service_request_api_service",
             return_value=AsyncMock(get_service_request=AsyncMock(return_value=mock_result)),
         ):
             result = await sr_status_sync_node(state)
@@ -488,7 +488,7 @@ class TestSRStatusSyncRddStatus:
             status_code=200,
         )
         with patch(
-            "app.agents.graph.nodes.sr_status_sync_node.get_service_request_api_service",
+            "app.agents.graph.nodes.shared.sr_status_sync_node.get_service_request_api_service",
             return_value=AsyncMock(get_service_request=AsyncMock(return_value=mock_result)),
         ):
             result = await sr_status_sync_node(state)
@@ -518,7 +518,7 @@ class TestSRStatusSyncRddStatus:
             status_code=200,
         )
         with patch(
-            "app.agents.graph.nodes.sr_status_sync_node.get_service_request_api_service",
+            "app.agents.graph.nodes.shared.sr_status_sync_node.get_service_request_api_service",
             return_value=AsyncMock(get_service_request=AsyncMock(return_value=mock_result)),
         ):
             result = await sr_status_sync_node(state)

@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from app.agents.graph.nodes.missing_field_node import (
+from app.agents.graph.nodes.handover.missing_field_node import (
     BACKEND_PROTECTED_FIELDS,
     missing_field_node,
 )

@@ -66,7 +66,7 @@ def mock_db() -> AsyncMock:
 def mock_llm_gateway() -> MagicMock:
     """Deterministic LLMGateway stub.
 
-    By default ``complete_json`` returns a CREATE_HANDOVER_SERVICE_REQUEST
+    By default ``complete_json`` returns a CREATE_RDD_SERVICE_REQUEST
     supervisor decision at confidence 0.92.  Individual tests can override
     ``complete_json.return_value`` as needed.
     """
@@ -77,11 +77,11 @@ def mock_llm_gateway() -> MagicMock:
     gateway.complete_json = AsyncMock(
         return_value=(
             {
-                "intent": "CREATE_HANDOVER_SERVICE_REQUEST",
+                "intent": "CREATE_RDD_SERVICE_REQUEST",
                 "confidence": 0.92,
                 "service_category": "FIT_OUT_AND_HANDOVER",
                 "sub_category": "HANDOVER",
-                "target_agent": "handover_service_request_agent",
+                "target_agent": "rdd_agent",
                 "reasoning": "Integration test: user wants handover SR",
             },
             100,  # input_tokens
@@ -99,13 +99,13 @@ def mock_llm_gateway() -> MagicMock:
 
 @pytest.fixture()
 def mock_supervisor_decision() -> SupervisorDecision:
-    """High-confidence CREATE_HANDOVER_SERVICE_REQUEST decision."""
+    """High-confidence CREATE_RDD_SERVICE_REQUEST decision."""
     return SupervisorDecision(
-        intent="CREATE_HANDOVER_SERVICE_REQUEST",
+        intent="CREATE_RDD_SERVICE_REQUEST",
         confidence=0.92,
         service_category="FIT_OUT_AND_HANDOVER",
         sub_category="HANDOVER",
-        target_agent="handover_service_request_agent",
+        target_agent="rdd_agent",
         reasoning="Integration test decision",
     )
 

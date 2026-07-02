@@ -1,23 +1,23 @@
-"""Workflow configuration registry — enables multi-workflow scaling.
+"""Workflow configuration registry — enables multi-agent / multi-lifecycle scaling.
 
-Each workflow agent registers a ``WorkflowConfig`` here that captures all the
-per-workflow knowledge that shared pipeline nodes need.  Shared nodes (e.g.
+Each agent registers a ``WorkflowConfig`` here that captures all the
+per-agent knowledge that shared pipeline nodes need.  Shared nodes (e.g.
 ``field_extraction_node``, ``missing_field_node``, ``_route_after_sync``,
 ``_route_after_validation``) look up the active agent's config at runtime
-instead of hard-coding handover-specific values.
+instead of hard-coding rdd_agent-specific values.
 
-Adding a new workflow
----------------------
+Adding a new agent (e.g. rcd_agent for a renovation lifecycle)
+--------------------------------------------------------------
 1. Register a new ``WorkflowConfig`` in ``WORKFLOW_CONFIG_REGISTRY`` below.
 2. Add the agent to ``SERVICE_REQUEST_AGENT_REGISTRY`` in ``agents/registry.py``.
-3. Add the agent entry node to ``_AGENT_ENTRY_NODES`` in ``helper_agent_graph.py``.
-4. Add action intents to ``ROLE_PERMITTED_INTENTS`` in ``helper_schema.py``.
+3. Add the agent entry node to ``_AGENT_ENTRY_NODES`` in ``help_agent_graph.py``.
+4. Add action intents to ``ROLE_PERMITTED_INTENTS`` in ``help_agent_schema.py``.
 5. Update ``supervisor_prompt.py`` to describe the new intents.
 6. Implement the new entry / payload / submission nodes under ``nodes/<agent>/``.
-7. Wire new nodes into ``build_helper_agent_graph()``.
+7. Wire new nodes into ``build_help_agent_graph()``.
 
 No changes to ``field_extraction_node``, ``missing_field_node``,
-``_route_after_sync``, ``_route_after_validation``, or ``HelperIntent``.
+``_route_after_sync``, ``_route_after_validation``, or ``HelpAgentIntent``.
 """
 
 from __future__ import annotations
@@ -74,8 +74,8 @@ class WorkflowConfig:
         ``lease_lookup_node`` to fill in the rest programmatically.
     action_intents:
         Supervisor intents that activate this agent.  Used to derive
-        ``_SR_ACTION_INTENTS`` in ``helper_agent_graph.py`` and ``ALL_INTENTS``
-        in ``helper_schema.py``.
+        ``_SR_ACTION_INTENTS`` in ``help_agent_graph.py`` and ``ALL_INTENTS``
+        in ``help_agent_schema.py``.
     """
 
     agent_name: str
@@ -96,8 +96,13 @@ class WorkflowConfig:
 # ---------------------------------------------------------------------------
 
 
-def _build_handover_config() -> WorkflowConfig:
-    """Build the ``WorkflowConfig`` for the Handover Service Request agent.
+def _build_rdd_config() -> WorkflowConfig:
+    """Build the ``WorkflowConfig`` for the RDD Agent.
+
+    The RDD Agent handles the full RDD lifecycle:
+      Phase 1 (CREATE_SR)  — Mall Manager creates the SR
+      Phase 2 (FM_REVIEW)  — FM Manager / Operations inspects and adds documents
+      Phase 3 (RDD_REVIEW) — DD Engineer reviews, adds documents, approves/rejects
 
     Deferred to a function so circular imports are avoided — the prompts and
     question maps import from schema modules that may in turn import from the
@@ -107,7 +112,7 @@ def _build_handover_config() -> WorkflowConfig:
     from app.agents.services.missing_field_service import HANDOVER_FIELD_QUESTIONS
 
     return WorkflowConfig(
-        agent_name="handover_service_request_agent",
+        agent_name="rdd_agent",
         extraction_prompt=HANDOVER_EXTRACTION_SYSTEM_PROMPT,
         field_questions=HANDOVER_FIELD_QUESTIONS,
         stage_sync_nodes={
@@ -143,9 +148,9 @@ def _build_handover_config() -> WorkflowConfig:
         lease_trigger_fields=("lease_code", "lease_brand_mall"),
         action_intents=frozenset(
             {
-                "CREATE_HANDOVER_SERVICE_REQUEST",
-                "UPDATE_HANDOVER_SERVICE_REQUEST",
-                "APPROVE_HANDOVER_SERVICE_REQUEST",
+                "CREATE_RDD_SERVICE_REQUEST",
+                "UPDATE_RDD_SERVICE_REQUEST",
+                "APPROVE_RDD_SERVICE_REQUEST",
             }
         ),
     )
@@ -156,10 +161,66 @@ def _build_handover_config() -> WorkflowConfig:
 WORKFLOW_CONFIG_REGISTRY: dict[str, WorkflowConfig] = {}
 
 
+def _build_work_permit_config() -> WorkflowConfig:
+    """Build the ``WorkflowConfig`` for the Work Permit Agent.
+
+    Single-stage workflow: the Mall Manager creates a work permit SR.
+    There is no FM_REVIEW or RDD_REVIEW phase for work permits.
+    """
+    from app.agents.prompts.work_permit_extraction_prompt import (
+        WORK_PERMIT_EXTRACTION_SYSTEM_PROMPT,
+    )
+
+    field_questions: dict[str, str] = {
+        "lease_code": "Ask the user for the lease code associated with the unit where work will be performed.",
+        "lease_brand_mall": "Ask the user for the lease code, brand name, or mall name to identify the unit.",
+        "work_permit_type": (
+            "Ask the user what type of work permit they need. "
+            "Present the options clearly: "
+            "Construction Hot Work, Construction Cold Work, Construction Roof Access, "
+            "Maintenance Hot Work, Maintenance Cold Work, Maintenance Roof Access, or Operations."
+        ),
+        "description": "Ask the user for a brief description of the work to be performed.",
+        "start_date": "Ask the user for the start date of the work permit (YYYY-MM-DD).",
+        "end_date": "Ask the user for the end date of the work permit (YYYY-MM-DD).",
+        "contractor_name": "Ask the user for the name of the contractor performing the work (or say 'none' if not applicable).",
+        "comments": "Ask the user if they have any additional comments or instructions for this work permit request.",
+    }
+
+    return WorkflowConfig(
+        agent_name="work_permit_agent",
+        extraction_prompt=WORK_PERMIT_EXTRACTION_SYSTEM_PROMPT,
+        field_questions=field_questions,
+        stage_sync_nodes={},
+        collection_stages=frozenset({"CREATE_WORK_PERMIT"}),
+        confirmation_nodes={"CREATE_WORK_PERMIT": "work_permit_confirmation"},
+        terminal_stages=frozenset({"WP_CREATED"}),
+        backend_fields=frozenset(
+            {
+                "lease_id",
+                "property_id",
+                "unit_codes",
+                "mall",
+                "brand",
+                "tenant_profile_id",
+                "city",
+                "contracted_area",
+                "lease",
+            }
+        ),
+        auto_generated_fields=frozenset(),
+        lease_trigger_fields=("lease_code", "lease_brand_mall"),
+        action_intents=frozenset({"CREATE_WORK_PERMIT_SR"}),
+    )
+
+
 def _init_registry() -> None:
     """Populate the registry with all built-in workflow configs."""
-    handover_cfg = _build_handover_config()
-    WORKFLOW_CONFIG_REGISTRY[handover_cfg.agent_name] = handover_cfg
+    rdd_cfg = _build_rdd_config()
+    WORKFLOW_CONFIG_REGISTRY[rdd_cfg.agent_name] = rdd_cfg
+
+    wp_cfg = _build_work_permit_config()
+    WORKFLOW_CONFIG_REGISTRY[wp_cfg.agent_name] = wp_cfg
 
 
 _init_registry()

@@ -34,9 +34,16 @@ class AgentConfig(TypedDict):
 SERVICE_REQUEST_AGENT_REGISTRY: dict[str, dict[str, AgentConfig]] = {
     "FIT_OUT_AND_HANDOVER": {
         "HANDOVER": {
-            "agent_name": "handover_service_request_agent",
-            "display_name": "Handover Service Request Agent",
+            "agent_name": "rdd_agent",
+            "display_name": "RDD Agent",
             "schema_key": "handover_service_request_schema",
+        },
+    },
+    "WORK_PERMIT": {
+        "WORK_PERMIT": {
+            "agent_name": "work_permit_agent",
+            "display_name": "Work Permit Agent",
+            "schema_key": "work_permit_service_request_schema",
         },
     },
 }

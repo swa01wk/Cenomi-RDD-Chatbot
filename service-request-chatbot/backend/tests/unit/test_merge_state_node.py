@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from app.agents.graph.nodes.merge_state_node import (
+from app.agents.graph.nodes.handover.merge_state_node import (
     BACKEND_PROTECTED_FIELDS,
     merge_state_node,
 )

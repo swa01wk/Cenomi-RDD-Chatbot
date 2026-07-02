@@ -30,7 +30,7 @@
 1. Switch to the **Observability** tab.
 2. The trace for this session appears at the top of the list.
 3. Click it and walk through the node spans:
-   - `supervisor` — intent classified as `CREATE_HANDOVER_SERVICE_REQUEST`
+   - `supervisor` — intent classified as `CREATE_RDD_SERVICE_REQUEST`
    - `lease_lookup` — `t0105712` resolved; `brand_id`, `property_id`, `contract_id` auto-populated
    - `field_extraction` → `validation` → `confirmation` → `payload_builder` → `api_submission`
    - `api_submission` span: `status_code = 201`, `sr_id` UUID visible

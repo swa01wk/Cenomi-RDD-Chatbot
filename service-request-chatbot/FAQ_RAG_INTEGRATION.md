@@ -1,6 +1,6 @@
 # FAQ Node RAG Integration — Cloud-Agnostic Design
 
-> Implementation guide for adding hybrid-search RAG to the helper agent's `faq_node`.
+> Implementation guide for adding hybrid-search RAG to the help agent's `faq_node`.
 > All changes are **self-contained in this repo** — no code is imported from staging.
 
 ---
@@ -23,7 +23,7 @@ The only real dependency on staging is the **live Azure AI Search index** (`ceno
 
 ### 1. Current State — faq_node today
 
-The helper agent is a 26-node LangGraph compiled in `helper_agent_graph.py`. The FAQ node answers questions using a static embedded string in `faq_prompt.py` — no external search, no vector DB.
+The help agent is a 26-node LangGraph compiled in `help_agent_graph.py`. The FAQ node answers questions using a static embedded string in `faq_prompt.py` — no external search, no vector DB.
 
 ```
 POST /chat
@@ -503,7 +503,7 @@ AZURE_SEARCH_INDEX_NAME=cenomi-help-index
 ## What Does NOT Change
 
 - LangGraph graph topology — `supervisor → faq_node → response_generation → save_state`
-- `_FAQ_INTENTS` routing constant in `helper_agent_graph.py`
+- `_FAQ_INTENTS` routing constant in `help_agent_graph.py`
 - `response_generation_node` — untouched
 - All SR workflow nodes (handover, FM review, RDD review) — untouched
 - `LLMGateway` — untouched

@@ -33,7 +33,7 @@ from app.agents.prompts.supervisor_prompt import (
     SUPERVISOR_SYSTEM_PROMPT,
 )
 from app.agents.registry import lookup_agent
-from app.agents.schemas.helper_schema import intents_for_roles
+from app.agents.schemas.help_agent_schema import intents_for_roles
 from app.agents.schemas.supervisor_schema import SupervisorDecision
 from app.agents.graph.state import ServiceRequestState
 from app.observability.decorators import trace_node
