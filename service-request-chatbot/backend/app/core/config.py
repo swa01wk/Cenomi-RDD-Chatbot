@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", validation_alias="ENVIRONMENT")
     debug: bool = Field(default=False, validation_alias="DEBUG")
     api_v1_prefix: str = Field(default="/api/v1", validation_alias="API_V1_PREFIX")
+    api_v2_prefix: str = Field(default="/api/v2", validation_alias="API_V2_PREFIX")
 
     cors_origins: str = Field(
         default="http://localhost:3000",
@@ -76,6 +77,18 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="PLATFORM_LOGIN_EMAIL",
         description="Email address used for service-to-service platform login.",
+    )
+
+    # ── MSP Platform integration ──────────────────────────────────────────────
+    msp_service_token: str | None = Field(
+        default=None,
+        validation_alias="MSP_SERVICE_TOKEN",
+        description=(
+            "Inbound x-internal-api-token value expected from the MSP Platform frontend. "
+            "When set, /api/v1/chat and /api/v1/chat/stream reject requests that omit or "
+            "mismatch this token.  When absent (default), validation is skipped — "
+            "shadow mode, matching the RBAC_ENFORCE=false pattern."
+        ),
     )
 
     jwt_secret_key: str = Field(default="change-me", validation_alias="JWT_SECRET_KEY")

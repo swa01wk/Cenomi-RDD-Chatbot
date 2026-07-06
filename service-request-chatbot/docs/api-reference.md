@@ -9,6 +9,129 @@
 
 All routes are prefixed as documented below. FastAPI auto-generates OpenAPI docs at `/docs` (Swagger UI) and `/redoc` when `ENVIRONMENT != production`.
 
+## API Version Matrix
+
+All routes are available at both `/api/v1` (backward compat) and `/api/v2` (current). New integrations should target v2. The MSP Platform help endpoints are contractually pinned to v1 and are not duplicated at v2.
+
+| Route group | v1 | v2 |
+|---|---|---|
+| Health / ready | `/api/v1/health` | `/api/v2/health` |
+| Auth | `/api/auth/login` | `/api/v2/auth/login` |
+| RDD chat | `/api/chat/service-request` | `/api/v2/chat/service-request` |
+| Upload | `/api/v1/upload` | `/api/v2/upload` |
+| Observability | `/api/observability/...` | `/api/v2/observability/...` |
+| MSP help chat (sync) | `/api/v1/chat` | *(v1 only)* |
+| MSP help chat (stream) | `/api/v1/chat/stream` | *(v1 only)* |
+
+---
+
+## MSP Platform Help Chat API
+
+These endpoints match the `cenomi-ai-backend` API contract so the MSP Platform frontend can route help/FAQ traffic to this service.
+
+### POST /api/v1/chat
+
+Synchronous help agent response.
+
+**Auth headers (both required in production):**
+```http
+x-internal-api-token: <MSP_SERVICE_TOKEN>
+Authorization: Bearer <ai_token>
+```
+
+**Request**
+
+```json
+{
+  "message": "How do I submit a service request?",
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "language": "en",
+  "context": {
+    "current_url_pattern": "/servicerequest",
+    "help_category": "Service Requests",
+    "help_subcategory": "How to Submit"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message` | string | **Yes** | User's question (1–4000 chars) |
+| `conversation_id` | UUID string | No | Omit on first turn; include for multi-turn context |
+| `language` | `"en"` \| `"ar"` | No | Preferred language; auto-detected when omitted |
+| `context` | object | No | Page-aware RAG grounding hint |
+| `context.current_url_pattern` | string | No | Current page URL, e.g. `"/servicerequest"` |
+| `context.help_category` | string | No | Top-level help category |
+| `context.help_subcategory` | string | No | Help subcategory |
+
+**Response 200 OK**
+
+```json
+{
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "message_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "message": "To submit a service request, navigate to the SR module...",
+  "sources": [
+    { "source_type": "help_content", "title": "Service Request Guide" },
+    { "source_type": "user_guide",   "title": "Platform User Manual v2" }
+  ],
+  "language": "en"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `conversation_id` | UUID string | Session ID — reuse on the next turn |
+| `message_id` | UUID string | Per-message ID for observability |
+| `message` | string | Assistant reply text |
+| `sources` | array | RAG citations (`source_type`, `title`) — empty when no KB results |
+| `language` | string | Detected or requested language code |
+
+**Response 401** — missing or incorrect `x-internal-api-token` (when `MSP_SERVICE_TOKEN` is configured).
+
+**Response 422** — missing or empty `message` field.
+
+---
+
+### POST /api/v1/chat/stream
+
+SSE streaming help agent response. The MSP Platform frontend uses this as the primary endpoint.
+
+**Request** — same shape as `POST /api/v1/chat`.
+
+**Response** — `Content-Type: text/event-stream`
+
+SSE event sequence per turn:
+
+```
+event: token
+data: {"text": "To submit a service request, navigate to the SR module..."}
+
+event: source
+data: {"source_type": "help_content", "title": "Service Request Guide"}
+
+event: done
+data: {"conversation_id": "550e8400-...", "message_id": "a1b2c3d4-...", "language": "en"}
+```
+
+On graph failure (stream already started — HTTP 200 returned, error inside SSE body):
+
+```
+event: error
+data: {"message": "An error occurred while processing your request."}
+```
+
+| Event | `data` fields | When |
+|-------|---------------|------|
+| `token` | `{text: string}` | Once — full message (Phase 1 pseudo-streaming) |
+| `source` | `{source_type: string, title: string}` | Once per RAG citation |
+| `done` | `{conversation_id: string, message_id: string, language: string}` | End of stream |
+| `error` | `{message: string}` | On any graph or infrastructure failure |
+
+> **Phase 1 note:** The full message is emitted as a single `token` event after the graph completes. True incremental token streaming (many `token` events) requires LLM gateway changes and is planned for Phase 2.
+
+---
+
 ---
 
 ## Chat API

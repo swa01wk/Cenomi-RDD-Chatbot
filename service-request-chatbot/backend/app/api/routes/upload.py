@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from app.agents.schemas.handover_schema import (
     ALL_DOCUMENT_TYPES,
     FM_ALLOWED_DOCUMENTS,
-    RDD_REQUIRED_DOCUMENTS,
+    RDD_ALLOWED_DOCUMENTS,
 )
 from app.agents.services.document_upload_service import DocumentUploadService
 from app.agents.services.permission_service import PermissionDeniedError, PermissionService
@@ -53,7 +53,7 @@ _ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset(
 )
 
 # RDD report document types require the APPROVED status flag on upload.
-_RDD_DOC_TYPES: frozenset[str] = frozenset(RDD_REQUIRED_DOCUMENTS)
+_RDD_DOC_TYPES: frozenset[str] = frozenset(RDD_ALLOWED_DOCUMENTS)
 _FM_DOC_TYPES: frozenset[str] = frozenset(FM_ALLOWED_DOCUMENTS)
 
 _permission_service = PermissionService()
@@ -233,19 +233,17 @@ async def upload_document(
             "status": "uploaded",
         }
 
-    # 7. Stub path — no sr_id or backend refs (first-turn or misconfigured) ---
-    logger.info(
-        "upload_document: no sr_id/backend_refs available — returning stub response "
+    # 7. No sr_id or backend refs — document upload requires an existing SR.
+    logger.warning(
+        "upload_document: blocked — no sr_id/lease_id available "
         "(session_id=%s, document_type=%s)",
         session_id,
         document_type,
     )
-    return {
-        "filename": file.filename or "unknown",
-        "content_type": content_type,
-        "document_type": document_type or "unspecified",
-        "document_id": None,
-        "signed_url": None,
-        "file_path": None,
-        "status": "received_pending_sr",
-    }
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=(
+            "Document upload requires an active Service Request. "
+            "Please create the service request first, then upload documents."
+        ),
+    )

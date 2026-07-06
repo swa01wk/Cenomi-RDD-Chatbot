@@ -355,10 +355,14 @@ class TestServiceRequestGraphState:
         "backend_refs", "validation_errors",
         # Output
         "response_message", "response_ui",
+        # FAQ RAG citations
+        "faq_sources",
         # UI-layer overrides (not persisted)
         "action_override", "corrected_fields",
         # Runtime-only services (not serialised)
         "trace_manager", "conversation_state_service",
+        # MSP Platform integration (injected by MSP adapter; absent on SR turns)
+        "language", "msp_context",
     }
 
     def test_all_keys_declared(self) -> None:

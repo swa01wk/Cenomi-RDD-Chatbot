@@ -40,9 +40,14 @@ FMDocumentType = Literal[
     "SR_HANDOVER_CHECKLIST",
     "SR_HANDOVER_SITE_SURVEY",
     "SR_COP_CHECKLIST_OTHER",
+    "SR_HANDOVER_OTHER",
 ]
 
-RDDDocumentType = Literal["DR_SR_HANDOVER_REPORT"]
+RDDDocumentType = Literal[
+    "DR_SR_HANDOVER_REPORT",
+    "SR_REJECTED_HANDOVER_REPORT",
+    "SR_HANDOVER_OTHER",
+]
 
 # ── Stage definition dataclass ────────────────────────────────────────────────
 
@@ -91,10 +96,12 @@ FM_REVIEW_STAGE = StageDefinition(
         # expected_handover_date is auto-computed as unit_readiness_date + 7 days
         # by merge_state_node. It is NOT asked of the user.
     ),
+    # At least one of these must be uploaded before FM save/approve.
     required_documents=(
         "SR_HANDOVER_CHECKLIST",
         "SR_HANDOVER_SITE_SURVEY",
         "SR_COP_CHECKLIST_OTHER",
+        "SR_HANDOVER_OTHER",
     ),
 )
 
@@ -108,7 +115,13 @@ RDD_REVIEW_STAGE = StageDefinition(
         "fitout_end_date",
         "trading_date",
     ),
-    required_documents=("DR_SR_HANDOVER_REPORT",),
+    # DR_SR_HANDOVER_REPORT is mandatory; SR_REJECTED_HANDOVER_REPORT and
+    # SR_HANDOVER_OTHER are optional additional uploads allowed at this stage.
+    required_documents=(
+        "DR_SR_HANDOVER_REPORT",
+        "SR_REJECTED_HANDOVER_REPORT",
+        "SR_HANDOVER_OTHER",
+    ),
 )
 
 # ── Registry / ordered stage list ────────────────────────────────────────────
@@ -163,12 +176,17 @@ OPTIONAL_FIELDS: frozenset[str] = frozenset({"description", "comments", "notes"}
 
 # ── Document type registries ──────────────────────────────────────────────────
 
+# All document types accepted at the FM_REVIEW stage (includes optional "Other").
 FM_ALLOWED_DOCUMENTS: tuple[str, ...] = FM_REVIEW_STAGE.required_documents
 
-RDD_REQUIRED_DOCUMENTS: tuple[str, ...] = RDD_REVIEW_STAGE.required_documents
+# All document types accepted at the RDD_REVIEW stage.
+RDD_ALLOWED_DOCUMENTS: tuple[str, ...] = RDD_REVIEW_STAGE.required_documents
+
+# The single document type that MUST be present before RDD submission.
+RDD_REQUIRED_DOCUMENTS: tuple[str, ...] = ("DR_SR_HANDOVER_REPORT",)
 
 ALL_DOCUMENT_TYPES: frozenset[str] = frozenset(
-    FM_ALLOWED_DOCUMENTS + RDD_REQUIRED_DOCUMENTS
+    FM_ALLOWED_DOCUMENTS + RDD_ALLOWED_DOCUMENTS
 )
 
 # ── Auto-computed (backend-computed) field set ────────────────────────────────

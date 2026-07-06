@@ -137,10 +137,25 @@ async def faq_node(state: ServiceRequestState) -> dict[str, Any]:
 
     if search_repo is not None:
         try:
-            lang = _detect_language(user_message)
+            # Prefer language explicitly set by the MSP adapter layer; fall back to detection.
+            lang = state.get("language") or _detect_language(user_message)
+
+            # Extract optional URL filter from MSP page-context hint.
+            msp_context: dict = state.get("msp_context") or {}  # type: ignore[assignment]
+            url_pattern: str | None = msp_context.get("current_url_pattern")
 
             t_search = time.monotonic()
-            results = await search_repo.search(query=user_message, lang=lang)
+            # Pass url_pattern as a keyword argument; SearchRepository
+            # implementations that do not support it will silently ignore it
+            # because the Protocol does not declare it as a required param.
+            search_kwargs: dict = {"query": user_message, "lang": lang}
+            if url_pattern:
+                search_kwargs["url_filter"] = url_pattern
+            try:
+                results = await search_repo.search(**search_kwargs)
+            except TypeError:
+                # Fallback: implementation doesn't accept url_filter — retry without it.
+                results = await search_repo.search(query=user_message, lang=lang)
             search_total_ms = int((time.monotonic() - t_search) * 1000)
 
             log.info(

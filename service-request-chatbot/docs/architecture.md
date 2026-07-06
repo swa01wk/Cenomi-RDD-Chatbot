@@ -171,16 +171,27 @@ graph TD
 **Application factory** (`app/main.py`):
 
 - `CORSMiddleware` from `settings.cors_origins_list`.
-- Route mounts:
-  - `GET {api_v1_prefix}/health`, `GET {api_v1_prefix}/ready`
+- App version: `2.0.0`
+- Route mounts (v1 — backward compat):
+  - `GET /api/v1/health`, `GET /api/v1/ready`
   - `POST /api/auth/login`, `GET /api/auth/me`
-  - `POST /api/chat/service-request` (primary chat — no v1 prefix)
-  - `POST /api/v1/chat/turn` (deprecated backward-compat stub)
+  - `POST /api/chat/service-request` (primary RDD chat — legacy unversioned path)
+  - `POST /api/v1/chat/turn` (deprecated stub)
   - `POST /api/v1/upload`
   - `GET /api/observability/traces`, `GET /api/observability/traces/{id}`
   - `GET /api/observability/sessions/{session_id}/replay`
   - `POST /api/observability/feedback`
   - `GET /api/v1/observability/metrics/summary`
+  - `POST /api/v1/chat` — **MSP Platform help chat (sync)** — contractually pinned to v1
+  - `POST /api/v1/chat/stream` — **MSP Platform help chat (SSE)** — contractually pinned to v1
+- Route mounts (v2 — current, new callers should use these):
+  - `GET /api/v2/health`, `GET /api/v2/ready`
+  - `POST /api/v2/auth/login`, `GET /api/v2/auth/me`
+  - `POST /api/v2/chat/service-request`
+  - `POST /api/v2/chat/turn`
+  - `POST /api/v2/upload`
+  - `GET /api/v2/observability/traces`, etc.
+  - `GET /api/v2/observability/metrics/summary`
 
 **`ChatOrchestrationService`** (`app/services/chat_orchestration_service.py`) is the central coordinator. It owns the full pipeline — from receiving the raw chat turn to returning a response — without delegating any routing decisions to the frontend:
 

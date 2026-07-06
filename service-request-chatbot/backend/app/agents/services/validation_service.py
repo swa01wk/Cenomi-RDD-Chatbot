@@ -26,11 +26,19 @@ from typing import Any
 from app.agents.schemas.handover_schema import (
     ALL_DOCUMENT_TYPES,
     FM_ALLOWED_DOCUMENTS,
+    RDD_ALLOWED_DOCUMENTS,
     RDD_REQUIRED_DOCUMENTS,
     STAGE_REGISTRY,
     role_can_act_on_stage,
 )
+from app.agents.schemas.work_permit_schema import (
+    STAGE_REGISTRY as WP_STAGE_REGISTRY,
+    VALID_WORK_PERMIT_TYPES,
+)
 from app.types.service_request import ValidationIssueDTO
+
+# Minimum number of documents required at FM_REVIEW before save/approve.
+_FM_MIN_DOCUMENT_COUNT = 1
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +52,7 @@ _INSPECTION_ALLOWED: frozenset[str] = frozenset({"FM_MANAGER", "OPERATIONS"})
 
 _STAGE_DOCUMENT_ALLOWLIST: dict[str, frozenset[str]] = {
     "FM_REVIEW": frozenset(FM_ALLOWED_DOCUMENTS),
-    "RDD_REVIEW": frozenset(RDD_REQUIRED_DOCUMENTS),
+    "RDD_REVIEW": frozenset(RDD_ALLOWED_DOCUMENTS),
 }
 
 # Ordered pairs that define the RDD date chain (earlier, later).
@@ -253,6 +261,63 @@ def validate_rdd_date_order(data: dict[str, Any]) -> list[ValidationResult]:
     return results
 
 
+def validate_document_count(
+    documents: list[dict[str, Any]],
+    workflow_stage: str,
+) -> list[ValidationResult]:
+    """Validate that the minimum required documents are present for *workflow_stage*.
+
+    Rules
+    -----
+    FM_REVIEW:
+        At least one document must be uploaded (any FM-allowed type).
+    RDD_REVIEW:
+        ``DR_SR_HANDOVER_REPORT`` must be present in the uploaded documents.
+    Other stages:
+        No document count requirement — returns empty list.
+    """
+    results: list[ValidationResult] = []
+
+    if workflow_stage == "FM_REVIEW":
+        count = len(documents or [])
+        passed = count >= _FM_MIN_DOCUMENT_COUNT
+        results.append(
+            _result(
+                field="_documents",
+                validation_type="document_count",
+                passed=passed,
+                message=(
+                    "At least one FM document must be uploaded before saving or approving."
+                    if not passed
+                    else f"{count} FM document(s) uploaded."
+                ),
+                blocking=True,
+            )
+        )
+
+    elif workflow_stage == "RDD_REVIEW":
+        doc_types = {
+            (doc.get("document_type") or doc.get("type") or doc.get("document_type_id") or "")
+            for doc in (documents or [])
+        }
+        has_report = any(dt in RDD_REQUIRED_DOCUMENTS for dt in doc_types)
+        results.append(
+            _result(
+                field="_documents",
+                validation_type="document_count",
+                passed=has_report,
+                message=(
+                    "A Handover Report (DR_SR_HANDOVER_REPORT) must be uploaded before submitting."
+                    if not has_report
+                    else "Required RDD handover report is present."
+                ),
+                blocking=True,
+            )
+        )
+
+    return results
+
+
 def validate_document_type(
     document_type: str,
     workflow_stage: str,
@@ -347,13 +412,32 @@ class ValidationService:
         ``state.validation_errors`` without further filtering.
         """
         errors: list[ValidationResult] = []
-        stage_def = STAGE_REGISTRY.get(workflow_stage)
+
+        # Resolve stage definition — handover stages first, then Work Permit.
+        stage_def = STAGE_REGISTRY.get(workflow_stage) or WP_STAGE_REGISTRY.get(workflow_stage)
 
         # 1. Required fields
         if stage_def:
             for r in validate_required_fields(data, stage_def.required_fields):
                 if r["status"] == "FAILED":
                     errors.append(r)
+
+        # 1a. Work Permit type enum check
+        if workflow_stage == "CREATE_WORK_PERMIT":
+            wp_type = data.get("work_permit_type")
+            if wp_type is not None and wp_type not in VALID_WORK_PERMIT_TYPES:
+                errors.append(
+                    _result(
+                        field="work_permit_type",
+                        validation_type="enum",
+                        passed=False,
+                        message=(
+                            f"Invalid work permit type '{wp_type}'. "
+                            f"Allowed values: {sorted(VALID_WORK_PERMIT_TYPES)}."
+                        ),
+                        blocking=True,
+                    )
+                )
 
         # 2. inspection_done_by (only when the field is present in data)
         idb_value = data.get("inspection_done_by")
@@ -374,7 +458,12 @@ class ValidationService:
                 if r["status"] == "FAILED":
                     errors.append(r)
 
-        # 5. Document type validation
+        # 5a. Document count validation (FM must have ≥1 doc; RDD must have report)
+        for r in validate_document_count(documents or [], workflow_stage):
+            if r["status"] == "FAILED":
+                errors.append(r)
+
+        # 5b. Document type validation (per-document allowlist check)
         for doc in documents or []:
             doc_type = doc.get("document_type") or doc.get("type")
             if doc_type:

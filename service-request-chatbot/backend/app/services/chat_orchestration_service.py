@@ -117,6 +117,8 @@ class ChatOrchestrationService:
         corrected_fields: dict[str, Any] | None = None,
         auth_context: AuthContext | None = None,
         sr_id: str | None = None,
+        language: str | None = None,
+        msp_context: dict[str, Any] | None = None,
     ) -> ChatTurnResult:
         """Execute one complete chat turn and return structured result."""
 
@@ -258,6 +260,12 @@ class ChatOrchestrationService:
             backend_refs = dict(initial_state.get("backend_refs") or {})
             backend_refs["sr_id"] = sr_id
             initial_state["backend_refs"] = backend_refs
+        # MSP Platform fields — injected by the MSP adapter layer only;
+        # absent (None) on all existing /api/chat/service-request turns.
+        if language is not None:
+            initial_state["language"] = language
+        if msp_context is not None:
+            initial_state["msp_context"] = msp_context
 
         # 6. Invoke graph -------------------------------------------------------
         result_state: dict[str, Any]

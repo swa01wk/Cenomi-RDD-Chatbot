@@ -1,8 +1,8 @@
 # Cenomi RDD Chatbot — Developer Handover Document
 
-> **Prepared:** June 2026  
+> **Prepared:** July 2026 (updated from June 2026)
 > **Audience:** Incoming developer(s) taking over this repository  
-> **Purpose:** Full current-state walkthrough and tenant platform integration guide
+> **Purpose:** Full current-state walkthrough, MSP Platform integration, and Azure deployment guide
 
 ---
 
@@ -21,10 +21,11 @@
 11. [Testing Strategy](#11-testing-strategy)
 12. [Current Implementation State](#12-current-implementation-state)
 13. [Known Gaps & Issues](#13-known-gaps--issues)
-14. [Tenant Platform Integration Guide](#14-tenant-platform-integration-guide)
-15. [Recommended Implementation Order](#15-recommended-implementation-order)
-16. [Environment Variables Reference](#16-environment-variables-reference)
-17. [Key Design Principles](#17-key-design-principles)
+14. [MSP Platform Integration](#14-msp-platform-integration)
+15. [Tenant Platform Integration Guide](#15-tenant-platform-integration-guide)
+16. [Recommended Implementation Order](#16-recommended-implementation-order)
+17. [Environment Variables Reference](#17-environment-variables-reference)
+18. [Key Design Principles](#18-key-design-principles)
 
 ---
 
@@ -288,19 +289,68 @@ Cenomi Platform APIs (or mocks)
 
 ### 6.2 API routes
 
+All v1 routes remain active for backward compatibility. New callers should use the v2 prefix. The MSP Platform help endpoints are contractually fixed to `/api/v1` and are not duplicated at v2.
+
+| Method | Path (v1) | Path (v2) | Description |
+|--------|-----------|-----------|-------------|
+| `GET` | `/api/v1/health` | `/api/v2/health` | Liveness check |
+| `GET` | `/api/v1/ready` | `/api/v2/ready` | Readiness (DB + Redis ping) |
+| `POST` | `/api/auth/login` | `/api/v2/auth/login` | Issue JWT |
+| `GET` | `/api/auth/me` | `/api/v2/auth/me` | Current user from JWT |
+| `POST` | `/api/chat/service-request` | `/api/v2/chat/service-request` | **Primary RDD chat endpoint** |
+| `POST` | `/api/v1/upload` | `/api/v2/upload` | Document upload |
+| `GET` | `/api/observability/traces` | `/api/v2/observability/traces` | Paginated trace list |
+| `GET` | `/api/observability/traces/{id}` | `/api/v2/observability/traces/{id}` | Trace detail |
+| `POST` | `/api/observability/feedback` | `/api/v2/observability/feedback` | Submit feedback |
+| `GET` | `/api/observability/sessions/{id}/replay` | `/api/v2/observability/sessions/{id}/replay` | Session replay |
+| `GET` | `/api/v1/observability/metrics/summary` | `/api/v2/observability/metrics/summary` | Aggregate metrics |
+
+**MSP Platform help chat endpoints (v1 only — contractually fixed):**
+
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/health` | Liveness check |
-| `GET` | `/api/v1/ready` | Readiness (DB + Redis ping) |
-| `POST` | `/api/chat/service-request` | **Primary chat endpoint** |
-| `POST` | `/api/v1/upload` | File upload (MIME validation stub — needs completion) |
-| `GET` | `/api/observability/traces` | Paginated trace list |
-| `GET` | `/api/observability/traces/{trace_id}` | Trace detail |
-| `POST` | `/api/observability/traces/{trace_id}/feedback` | Submit feedback |
-| `GET` | `/api/observability/sessions/{session_id}/replay` | Session replay |
-| `GET` | `/api/v1/observability/metrics/summary` | Aggregate metrics |
+| `POST` | `/api/v1/chat` | MSP help agent — sync JSON response |
+| `POST` | `/api/v1/chat/stream` | MSP help agent — SSE streaming response |
 
-### 6.3 Chat orchestration service
+### 6.3 MSP Platform adapter layer
+
+`app/api/routes/msp_chat.py` — thin adapter that wraps `ChatOrchestrationService` for the MSP Platform frontend.
+
+| Model | Purpose |
+|-------|---------|
+| `MSPChatRequest` | `{message, conversation_id?, language?, context?}` — MSP contract shape |
+| `MSPChatResponse` | `{conversation_id, message_id, message, sources, language}` — MSP contract shape |
+| `Source` | `{source_type, title}` — RAG citation item |
+| `_require_service_token` | FastAPI dependency — validates `x-internal-api-token` against `MSP_SERVICE_TOKEN` |
+
+Key mappings in the adapter:
+- `conversation_id` (MSP) ↔ `session_id` (internal)
+- `sources` (MSP) ← `faq_sources` (internal)
+- `message_id` — fresh `uuid4()` per turn
+- `language` — from request or auto-detected from response text
+
+**SSE streaming (Phase 1 — pseudo-streaming):** The graph runs synchronously, then the full message is emitted as a single `token` event, followed by N `source` events, then `done`. True token-level streaming requires LLM gateway changes (deferred).
+
+SSE event order per turn:
+```
+event: token
+data: {"text": "<full assistant message>"}
+
+event: source
+data: {"source_type": "help_content", "title": "FM Review Checklist"}
+...
+
+event: done
+data: {"conversation_id": "<uuid>", "message_id": "<uuid>", "language": "en"}
+```
+
+On graph failure:
+```
+event: error
+data: {"message": "An error occurred..."}
+```
+
+### 6.4 Chat orchestration service
 
 `app/services/chat_orchestration_service.py` → `ChatOrchestrationService.process_turn()`
 
@@ -355,9 +405,12 @@ The graph is compiled once at startup via `get_compiled_graph()` and reused. It 
 - `intent`, `active_agent`, `workflow_stage`
 - `collected_data` — all fields gathered so far
 - `missing_fields`, `validation_errors`
-- `response_text`, `ui_components`
+- `response_message`, `response_ui`
 - `backend_refs` — sr_id, platform references (protected from LLM)
 - `documents` — uploaded document metadata
+- `faq_sources` — RAG citations from `faq_node` (reset each turn by `load_session_node`)
+- `language` — `"en"` or `"ar"`, injected by MSP adapter when set in request
+- `msp_context` — `{current_url_pattern?, help_category?, help_subcategory?}`, injected by MSP adapter
 
 #### Supervisor intents
 
@@ -433,15 +486,19 @@ Handles authentication (login + bearer token) and all platform HTTP calls. When 
 
 | Client | File | Endpoint |
 |--------|------|----------|
-| Chat | `chat-client.ts` → `postServiceRequestChat()` | `POST {API_BASE_URL}/api/chat/service-request` |
+| Chat (RDD) | `chat-client.ts` → `postServiceRequestChat()` | `POST {API_BASE_URL}/api/chat/service-request` |
 | Observability | `observability-client.ts` | `/api/observability/...`, `/api/v1/observability/metrics/summary` |
 | Upload | `upload-client.ts` → `uploadDocument()` | `POST {API_BASE_URL}/api/v1/upload` |
+
+`ChatServiceResponse` (returned from `postServiceRequestChat`) now includes:
+- `faqSources?: Array<{source_type: string; title: string}>` — RAG citation chips for FAQ turns (previously dropped, now wired)
 
 ### 7.4 Known frontend issues
 
 - `chat-client.ts` **hardcodes** `user_id: "demo_user"` — this needs to come from real auth
 - `NEXT_PUBLIC_API_V1_PREFIX` is used by upload + metrics clients but the **chat client hardcodes `/api`** — verify consistency when wiring auth
 - No global state management — all state is local to `ServiceRequestChat.tsx`
+- `faqSources` is now in `ChatServiceResponse` but no `SourceChip` component renders it yet — the MSP frontend's `SourceChip.tsx` pattern should be followed
 
 ---
 
@@ -760,7 +817,87 @@ Two scenarios in `run_eval.py` still fail (31/33):
 
 ---
 
-## 14. Tenant Platform Integration Guide
+## 14. MSP Platform Integration
+
+This section documents the integration between the RDD-Chatbot help agent and the MSP Platform frontend (`cenomi-ai-backend`). The full validation spec is in `HELP_AGENT_VALIDATION.md`.
+
+### 14.1 What was built
+
+The RDD-Chatbot help agent has been extended with an MSP-compatible adapter layer:
+
+| What | Where |
+|------|-------|
+| MSP sync endpoint | `POST /api/v1/chat` |
+| MSP streaming endpoint | `POST /api/v1/chat/stream` |
+| Adapter source file | `backend/app/api/routes/msp_chat.py` |
+| Service token setting | `MSP_SERVICE_TOKEN` env var |
+| Graph state fields | `language`, `msp_context` in `ServiceRequestGraphState` |
+| Frontend gap fix | `faqSources` now in `ChatServiceResponse` and mapped in `chat-client.ts` |
+
+### 14.2 MSP Request / Response contract
+
+**Request** (`POST /api/v1/chat` and `/api/v1/chat/stream`):
+```json
+{
+  "message": "How do I submit a service request?",
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "language": "en",
+  "context": {
+    "current_url_pattern": "/servicerequest",
+    "help_category": "Service Requests",
+    "help_subcategory": "How to Submit"
+  }
+}
+```
+
+**Sync response** (`POST /api/v1/chat`):
+```json
+{
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "message_id": "a1b2c3d4-...",
+  "message": "To submit a service request, navigate to...",
+  "sources": [
+    { "source_type": "help_content", "title": "FM Review Checklist" }
+  ],
+  "language": "en"
+}
+```
+
+**SSE stream** (`POST /api/v1/chat/stream`) — Phase 1, pseudo-streaming:
+```
+event: token
+data: {"text": "To submit a service request, navigate to..."}
+
+event: source
+data: {"source_type": "help_content", "title": "FM Review Checklist"}
+
+event: done
+data: {"conversation_id": "550e8400-...", "message_id": "a1b2c3d4-...", "language": "en"}
+```
+
+### 14.3 Auth
+
+Both endpoints accept:
+- `x-internal-api-token: <service-uuid>` — validated against `MSP_SERVICE_TOKEN` (shadow mode when not set)
+- `Authorization: Bearer <ai_token>` — processed by existing `get_auth_context()`
+
+### 14.4 Enabling for MSP Platform
+
+1. Set `MSP_SERVICE_TOKEN=<uuid>` in the deployment environment — the token the MSP frontend sends
+2. Configure CORS to allow the MSP frontend's origin in `CORS_ORIGINS`
+3. Verify the MSP frontend targets `POST /api/v1/chat/stream` (primary) or `POST /api/v1/chat` (fallback)
+4. The `conversation_id` from the MSP frontend is used as the `session_id` — pass it back to maintain multi-turn context
+
+### 14.5 Phase 2 — True token streaming
+
+Phase 1 emits the full message in one `token` event. To match the MSP contract's expected incremental token delivery:
+1. Add `complete_json_streaming()` to `LLMGateway` (`app/agents/llm/gateway.py`)
+2. Update `faq_node` to yield tokens to a shared async queue
+3. Update `post_msp_chat_stream` to consume tokens as they arrive and emit one `event: token` per chunk
+
+---
+
+## 15. Tenant Platform Integration Guide
 
 This section covers everything needed to integrate the chatbot with the Cenomi tenant platform APIs.
 
@@ -1094,7 +1231,7 @@ Config: `LEASE_TENANT_API_BASE_URL` — leave empty to use mock data.
 
 ---
 
-## 15. Recommended Implementation Order
+## 16. Recommended Implementation Order
 
 From `gaps_and_pc/handover_chatbot_gap_closure_implementation.md`:
 
@@ -1122,7 +1259,7 @@ From `gaps_and_pc/handover_chatbot_gap_closure_implementation.md`:
 
 ---
 
-## 16. Environment Variables Reference
+## 17. Environment Variables Reference
 
 ### Backend (`backend/.env`)
 
@@ -1131,7 +1268,8 @@ From `gaps_and_pc/handover_chatbot_gap_closure_implementation.md`:
 | `APP_NAME` | No | `service-request-chatbot-api` | App name |
 | `ENVIRONMENT` | No | `development` | `development` / `production` |
 | `DEBUG` | No | `false` | Enable debug mode |
-| `API_V1_PREFIX` | No | `/api/v1` | API prefix |
+| `API_V1_PREFIX` | No | `/api/v1` | API v1 prefix (backward compat) |
+| `API_V2_PREFIX` | No | `/api/v2` | API v2 prefix (current) |
 | `CORS_ORIGINS` | No | `http://localhost:3000` | Comma-separated allowed origins |
 | `DATABASE_URL` | **Yes** | — | `postgresql+asyncpg://postgres:postgres@localhost:5432/service_request_chatbot` |
 | `REDIS_URL` | No | — | `redis://localhost:6379/0` |
@@ -1139,14 +1277,21 @@ From `gaps_and_pc/handover_chatbot_gap_closure_implementation.md`:
 | `LEASE_TENANT_API_BASE_URL` | No | *(empty = mock)* | Cenomi lease/tenant API base URL |
 | `FILE_UPLOAD_API_BASE_URL` | No | *(empty = mock)* | Cenomi file upload API base URL |
 | `PLATFORM_AUTH_BASE_URL` | No | *(defaults to SR URL)* | Platform auth endpoint base |
-| `PLATFORM_INTERNAL_API_TOKEN` | **Yes (prod)** | — | Internal API token for service login |
+| `PLATFORM_INTERNAL_API_TOKEN` | **Yes (prod)** | — | Outbound token for service-to-service platform login |
 | `PLATFORM_LOGIN_EMAIL` | **Yes (prod)** | — | Service account email for platform login |
+| `MSP_SERVICE_TOKEN` | No (shadow) | — | Inbound `x-internal-api-token` expected from MSP Platform frontend. When set, `/api/v1/chat` and `/api/v1/chat/stream` reject requests that omit or mismatch this token. When absent, validation is skipped (shadow mode). |
 | `JWT_SECRET_KEY` | **Yes (prod)** | `change-me-in-production` | JWT signing key |
 | `JWT_ALGORITHM` | No | `HS256` | JWT algorithm |
+| `RBAC_ENFORCE` | No | `false` | `true` = reject unauthenticated requests; `false` = shadow mode |
 | `OPENAI_API_KEY` | **Yes** | — | OpenAI API key |
 | `LLM_MODEL` | No | `gpt-4o-mini` | OpenAI model name |
-| `LLM_BASE_URL` | No | — | Custom LLM base URL (Azure/proxy) |
+| `LLM_BASE_URL` | No | — | Custom LLM base URL (Azure OpenAI / proxy) |
 | `LLM_CONFIDENCE_THRESHOLD` | No | `0.6` | Minimum confidence for LLM extraction |
+| `EMBEDDING_PROVIDER` | No | `openai` | `openai` or `azure_openai` |
+| `SEARCH_PROVIDER` | No | `azure_search` | RAG backend — `azure_search` only currently |
+| `AZURE_SEARCH_ENDPOINT` | No | — | Azure AI Search endpoint |
+| `AZURE_SEARCH_API_KEY` | No | — | Azure AI Search key |
+| `AZURE_SEARCH_INDEX_NAME` | No | — | Azure AI Search index name (e.g. `cenomi-help-index`) |
 
 ### Frontend (`frontend/.env.local`)
 
@@ -1157,7 +1302,7 @@ From `gaps_and_pc/handover_chatbot_gap_closure_implementation.md`:
 
 ---
 
-## 17. Key Design Principles
+## 18. Key Design Principles
 
 These must be preserved by any developer extending this codebase:
 

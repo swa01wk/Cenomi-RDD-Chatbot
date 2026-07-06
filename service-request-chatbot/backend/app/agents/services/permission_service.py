@@ -22,22 +22,28 @@ from app.types.chat import AuthContext
 # ---------------------------------------------------------------------------
 
 ACTION_PERMISSION_MAP: dict[str, str] = {
-    # ── CREATE stage (Mall Manager) ───────────────────────────────────────────
+    # ── Handover: CREATE stage (Mall Manager) ─────────────────────────────────
     "CREATE_HANDOVER_SR": "CAN_RAISE_HANDOVER_SR",
 
-    # ── FM_REVIEW stage (FM Manager / Operations) ─────────────────────────────
+    # ── Handover: FM_REVIEW stage (FM Manager / Operations) ───────────────────
     "UPLOAD_FM_HANDOVER_DOCUMENT": "CAN_FM_REVIEW_HANDOVER_SR",
     "SAVE_FM_HANDOVER_PROGRESS": "CAN_FM_REVIEW_HANDOVER_SR",
     "APPROVE_FM_HANDOVER": "CAN_APPROVE_FM_HANDOVER_SR",
     "REJECT_FM_HANDOVER": "CAN_APPROVE_FM_HANDOVER_SR",
 
-    # ── RDD_REVIEW stage (DD Engineer) ────────────────────────────────────────
+    # ── Handover: RDD_REVIEW stage (DD Engineer) ──────────────────────────────
     "UPLOAD_RDD_HANDOVER_REPORT": "CAN_RDD_REVIEW_HANDOVER_SR",
     "SUBMIT_RDD_HANDOVER_REPORT": "CAN_RDD_REVIEW_HANDOVER_SR",
     "APPROVE_RDD_FINAL": "CAN_RDD_REVIEW_HANDOVER_SR",
 
-    # ── Read / view ───────────────────────────────────────────────────────────
+    # ── Handover: Read / view ─────────────────────────────────────────────────
     "VIEW_HANDOVER_SR": "VIEW_FIT_OUT_HANDOVER",
+
+    # ── Work Permit: CREATE stage (Mall Manager) ──────────────────────────────
+    "CREATE_WORK_PERMIT_SR": "CAN_RAISE_WORK_PERMIT_SR",
+
+    # ── Work Permit: Read / view ──────────────────────────────────────────────
+    "VIEW_WORK_PERMIT_SR": "VIEW_WORK_PERMIT",
 
     # ── Legacy entries (kept for backward compatibility) ──────────────────────
     "FM_APPROVAL": "CAN_APPROVE_HANDOVER_SR",
@@ -52,20 +58,34 @@ ROLE_PERMISSION_MAP: dict[str, frozenset[str]] = {
     "MALL_MANAGER": frozenset({
         "CAN_RAISE_HANDOVER_SR",
         "VIEW_FIT_OUT_HANDOVER",
+        "CAN_RAISE_WORK_PERMIT_SR",
+        "VIEW_WORK_PERMIT",
     }),
     "FM_MANAGER": frozenset({
         "CAN_FM_REVIEW_HANDOVER_SR",
         "CAN_APPROVE_FM_HANDOVER_SR",
         "VIEW_FIT_OUT_HANDOVER",
+        "VIEW_WORK_PERMIT",
     }),
     "OPERATIONS": frozenset({
         "CAN_FM_REVIEW_HANDOVER_SR",
         "CAN_APPROVE_FM_HANDOVER_SR",
         "VIEW_FIT_OUT_HANDOVER",
+        "VIEW_WORK_PERMIT",
     }),
     "DD_ENGINEER": frozenset({
         "CAN_RDD_REVIEW_HANDOVER_SR",
         "VIEW_FIT_OUT_HANDOVER",
+        "VIEW_WORK_PERMIT",
+    }),
+    "ADMIN": frozenset({
+        "CAN_RAISE_HANDOVER_SR",
+        "CAN_FM_REVIEW_HANDOVER_SR",
+        "CAN_APPROVE_FM_HANDOVER_SR",
+        "CAN_RDD_REVIEW_HANDOVER_SR",
+        "VIEW_FIT_OUT_HANDOVER",
+        "CAN_RAISE_WORK_PERMIT_SR",
+        "VIEW_WORK_PERMIT",
     }),
 }
 
@@ -156,3 +176,7 @@ class PermissionService:
     def ensure_can_view_trace(self, auth: AuthContext) -> None:
         """Assert the caller may read handover SR records."""
         self.check("VIEW_HANDOVER_SR", auth)
+
+    def ensure_can_create_work_permit(self, auth: AuthContext) -> None:
+        """Assert the caller may raise a new Work Permit Service Request."""
+        self.check("CREATE_WORK_PERMIT_SR", auth)

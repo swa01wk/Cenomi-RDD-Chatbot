@@ -1168,6 +1168,237 @@ curl -s -X POST "$BASE" \
 
 ---
 
+### Scenario 24 — FM Approve Blocked Without Documents
+
+**Goal:** Verify that `approve_fm_review` with no uploaded documents returns a blocking validation error.
+**Role:** FM_MANAGER
+**Prerequisite:** SR exists with FM_REVIEW status
+
+| Turn | Who | Send | Expected behavior | Assert |
+|---|---|---|---|---|
+| 1 | FM Manager | Opens SR (`sr_id` in body), empty message | `sr_status_sync` detects FM_REVIEW; asks for dates | `workflow_stage = "FM_REVIEW"` |
+| 2 | FM Manager | `Unit ready July 10, handover July 17 2026` | Dates stored; asks for documents | `collected_data.unit_readiness_date` set |
+| 3 | FM Manager | `action: "approve_fm_review"` (no docs uploaded) | **Blocked** — validation error: at least one FM document required | `validation_errors` contains `document_count` failure; no platform PATCH made |
+
+```bash
+FM_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"khalid@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+FM_SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"message\":\"\",\"sr_id\":\"$SR_ID\"}" | jq -r '.session_id')
+
+# Provide dates but NO document upload
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$FM_SESSION\",\"message\":\"Unit ready July 10 2026, handover July 17\"}" \
+  | jq '{message}'
+
+# Attempt approve without documents — should be blocked
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$FM_SESSION\",\"message\":\"\",\"action\":\"approve_fm_review\"}" \
+  | jq '{message, validation_errors: .state.validation_errors}'
+```
+
+**Expected:** Message mentions document requirement; `validation_errors` contains entry with `validation_type = "document_count"`.
+
+---
+
+### Scenario 25 — RDD Submit Blocked Without Handover Report
+
+**Goal:** Verify that `submit_rdd_report` without uploading `DR_SR_HANDOVER_REPORT` returns a blocking error.
+**Role:** DD_ENGINEER
+**Prerequisite:** SR exists in RDD_REVIEW stage
+
+| Turn | Who | Send | Expected behavior | Assert |
+|---|---|---|---|---|
+| 1 | DD Engineer | Opens SR | `RDD_REVIEW` detected | `workflow_stage = "RDD_REVIEW"` |
+| 2 | DD Engineer | All RDD dates + guideline | Data collected | All RDD required fields set |
+| 3 | DD Engineer | `action: "submit_rdd_report"` (no report uploaded) | **Blocked** — DR_SR_HANDOVER_REPORT required | `validation_errors` contains `document_count`; no POST to platform |
+
+```bash
+DD_TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"sara@cenomi.com","password":"test1234"}' | jq -r '.access_token')
+
+DD_SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"message\":\"\",\"sr_id\":\"$SR_ID\"}" | jq -r '.session_id')
+
+# Provide dates but NO report upload
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$DD_SESSION\",\"message\":\"Actual handover July 15, fitout July 16-20, trading July 28 2026. Guideline: http://cenomi.com/gl\"}" \
+  | jq '{message}'
+
+# Submit without report — should fail
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$DD_SESSION\",\"message\":\"\",\"action\":\"submit_rdd_report\"}" \
+  | jq '{message, validation_errors: .state.validation_errors}'
+```
+
+---
+
+### Scenario 26 — Upload Without SR Returns 422
+
+**Goal:** Verify the upload route blocks document upload when no SR exists.
+
+```bash
+# Upload without session or sr_id — must return 422
+curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/upload \
+  -H "Authorization: Bearer $MM_TOKEN" \
+  -F "file=@/tmp/test.pdf" \
+  -F "document_type=SR_HANDOVER_CHECKLIST"
+# Expected: 422
+
+# With session but no SR created yet
+curl -s -X POST http://localhost:8000/api/upload \
+  -H "Authorization: Bearer $MM_TOKEN" \
+  -F "file=@/tmp/test.pdf" \
+  -F "document_type=SR_HANDOVER_CHECKLIST" \
+  -F "session_id=$SESSION_NO_SR" \
+  | jq '{detail}'
+# Expected: {"detail": "Document upload requires an active Service Request..."}
+```
+
+**Assert:** HTTP status 422. Response `detail` mentions SR requirement.
+
+---
+
+### Scenario 27 — New Document Types (SR_HANDOVER_OTHER, SR_REJECTED_HANDOVER_REPORT)
+
+**Goal:** Verify that `SR_HANDOVER_OTHER` is accepted for FM stage, and `SR_REJECTED_HANDOVER_REPORT` is accepted for RDD stage.
+
+```bash
+# SR_HANDOVER_OTHER is valid for FM stage
+curl -s -X POST http://localhost:8000/api/upload \
+  -H "Authorization: Bearer $FM_TOKEN" \
+  -F "file=@/tmp/other-doc.pdf" \
+  -F "document_type=SR_HANDOVER_OTHER" \
+  -F "session_id=$FM_SESSION" \
+  -F "sr_id=$SR_ID" \
+  | jq '{document_id, status}'
+# Expected: document_id non-null, status "uploaded"
+
+# SR_REJECTED_HANDOVER_REPORT is valid for RDD stage
+curl -s -X POST http://localhost:8000/api/upload \
+  -H "Authorization: Bearer $DD_TOKEN" \
+  -F "file=@/tmp/rejected-report.pdf" \
+  -F "document_type=SR_REJECTED_HANDOVER_REPORT" \
+  -F "session_id=$DD_SESSION" \
+  -F "sr_id=$SR_ID" \
+  | jq '{document_id, status}'
+# Expected: document_id non-null, status "uploaded"
+
+# SR_REJECTED_HANDOVER_REPORT NOT valid for FM stage — must fail with 422
+curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/upload \
+  -H "Authorization: Bearer $FM_TOKEN" \
+  -F "file=@/tmp/rejected-report.pdf" \
+  -F "document_type=SR_REJECTED_HANDOVER_REPORT" \
+  -F "session_id=$FM_SESSION" \
+  -F "sr_id=$SR_ID"
+# Expected: 403 (FM Manager doesn't have RDD upload permission)
+```
+
+---
+
+### Scenario 28 — Work Permit Creation
+
+**Goal:** Verify that MALL_MANAGER can create a Work Permit SR, and FM_MANAGER is denied.
+
+| Turn | Who | Send | Expected | Assert |
+|---|---|---|---|---|
+| 1 | MALL_MANAGER | `I need a work permit for construction at Jawharat Jeddah` | Intent classified; asks for details | `active_agent = "work_permit_agent"` |
+| 2 | MALL_MANAGER | `t0105712, cold construction work, from August 1 to August 5 2026` | Fields extracted; asks for confirmation | All WP fields populated |
+| 3 | MALL_MANAGER | Click Confirm | WP SR submitted | `workflow_stage = "WP_CREATED"`, SR ID returned |
+
+```bash
+MM_SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $MM_TOKEN" \
+  -d '{"user_id":"aisha","message":"I need a work permit for cold construction work"}' \
+  | jq -r '.session_id')
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $MM_TOKEN" \
+  -d "{\"user_id\":\"aisha\",\"session_id\":\"$MM_SESSION\",\"message\":\"Lease t0105712, cold construction, starts August 1, ends August 5 2026, contractor ABC Ltd\"}" \
+  | jq '{message, active_agent: .active_agent}'
+
+# Confirm
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $MM_TOKEN" \
+  -d "{\"user_id\":\"aisha\",\"session_id\":\"$MM_SESSION\",\"message\":\"Confirm\",\"action\":\"confirm\"}" \
+  | jq '{message, workflow_stage: .state.workflow_stage}'
+```
+
+FM Manager denied:
+
+```bash
+# FM Manager should be denied for Work Permit creation
+FM_SESSION=$(curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d '{"user_id":"khalid","message":"I need a work permit for construction"}' \
+  | jq -r '.session_id')
+
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$FM_SESSION\",\"message\":\"Confirm\",\"action\":\"confirm\"}" \
+  | jq '{message}'
+# Expected: permission denied message
+```
+
+---
+
+### Scenario 29 — Stage-Specific Confirmation Cards
+
+**Goal:** Verify that FM_REVIEW and RDD_REVIEW confirmation cards show the correct stage-specific fields.
+
+#### 29A — FM Confirmation Card Shows FM Fields
+
+```bash
+# After FM dates collected and approved — check the confirmation card fields
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FM_TOKEN" \
+  -d "{\"user_id\":\"khalid\",\"session_id\":\"$FM_SESSION\",\"message\":\"\",\"action\":\"approve_fm_review\"}" \
+  | jq '{
+      card_type: .ui.type,
+      card_stage: .ui.stage,
+      card_request_type: .ui.requestType,
+      field_keys: [.ui.fields[]?.key]
+    }'
+```
+
+**Assert:**
+- `ui.type = "confirmation_card"`
+- `ui.stage = "FM_REVIEW"`
+- `ui.requestType = "FM Review — Save / Approve"`
+- `field_keys` contains `unit_readiness_date`, `expected_handover_date`
+- `field_keys` does NOT contain `startDate`, `endDate`, `inspection_done_by`
+
+#### 29B — RDD Confirmation Card Shows RDD Fields
+
+```bash
+curl -s -X POST http://localhost:8000/api/chat/service-request \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DD_TOKEN" \
+  -d "{\"user_id\":\"sara\",\"session_id\":\"$DD_SESSION\",\"message\":\"\",\"action\":\"submit_rdd_report\"}" \
+  | jq '{
+      card_type: .ui.type,
+      card_stage: .ui.stage,
+      card_request_type: .ui.requestType,
+      field_keys: [.ui.fields[]?.key]
+    }'
+```
+
+**Assert:**
+- `ui.stage = "RDD_REVIEW"`
+- `ui.requestType = "RDD Report Submission"`
+- `field_keys` contains `guideLineLink`, `actual_handover_date`, `fitout_start_date`, `fitout_end_date`, `trading_date`
+- `field_keys` does NOT contain `description`, `startDate`, `endDate`
+
+---
+
 ## Part 4 — State Assertion Reference
 
 All fields come from `response.state` in `POST /api/chat/service-request` responses.
@@ -1273,6 +1504,16 @@ This matrix shows which lifecycle phases each scenario exercises. Use it to iden
 | 18 — Multi-field + date violation | ✓ | ✓ | | ✓ | ✓ | ✓ | | | | ✓ | | ✓ |
 | 19 — Multi-field, no lease | ✓ | ✓ | | ✓ | ✓ | ✓ | | | | | | ✓ |
 | 20 — Date edge cases | ✓ | ✓ | | ✓ | ✓ | ✓ | | | | ✓ | | ✓ |
+
+| 21 — FM Review | | | | | | ✓ | | | | | | ✓ |
+| 22 — RDD Review | | | | | | ✓ | | | | | | ✓ |
+| 23 — Full Sequential Lifecycle | ✓ | ✓ | | ✓ | | ✓ | | | | | | ✓ |
+| 24 — FM approve without docs | | | | | | | | | | ✓ | | |
+| 25 — RDD submit without report | | | | | | | | | | ✓ | | |
+| 26 — Upload without SR (422) | | | | | | | | | | ✓ | | |
+| 27 — New document types | | | | | | | | | | ✓ | | |
+| 28 — Work Permit creation | ✓ | ✓ | | ✓ | | ✓ | | | | | | ✓ |
+| 29 — Stage-specific cards | | | | | | ✓ | | | | | | |
 
 ### Coverage gaps intentionally excluded from this document
 

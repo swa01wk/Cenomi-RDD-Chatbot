@@ -13,8 +13,11 @@ from typing import Any
 from uuid import UUID
 
 from app.agents.graph.state import ServiceRequestState
+from app.agents.services.permission_service import PermissionDeniedError, PermissionService
 from app.agents.services.service_request_api_service import get_service_request_api_service
 from app.observability.decorators import trace_node
+
+_permission_service = PermissionService()
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,20 @@ def _to_uuid(value: Any) -> UUID | None:
 @trace_node("work_permit_api_submission", "TOOL")
 async def work_permit_api_submission_node(state: ServiceRequestState) -> dict[str, Any]:
     """Submit the Work Permit SR payload to the SR API."""
+
+    # ── 0. Permission check ────────────────────────────────────────────────
+    auth_context = state.get("auth_context")
+    if auth_context is not None:
+        try:
+            _permission_service.ensure_can_create_work_permit(auth_context)
+        except PermissionDeniedError as exc:
+            logger.warning("work_permit_api_submission_node: permission denied — %s", exc)
+            return {
+                "status": "FAILED",
+                "response_message": (
+                    "You do not have permission to create a Work Permit Service Request."
+                ),
+            }
 
     # ── 1. Confirmation guard ──────────────────────────────────────────────
     if state.get("confirmation_status") != "CONFIRMED":

@@ -9,13 +9,20 @@ import { FieldCorrectionPanel } from "./FieldCorrectionPanel";
 import { LeaseSelectionCard } from "./LeaseSelectionCard";
 import { DocumentRequirementCard } from "./DocumentRequirementCard";
 import { SRPreviewCard } from "./SRPreviewCard";
+import { LifecycleStepper } from "./LifecycleStepper";
+import { StageActions } from "./StageActions";
+import { StageContextPanel } from "./StageContextPanel";
+import { DocumentUploadPanel } from "./DocumentUploadPanel";
 import { postServiceRequestChat } from "@/lib/api/chat-client";
+import { getStoredUser } from "@/lib/api/auth-client";
 import type {
+  ChatAction,
   ChatMessage,
   ResponseUI,
   ResponseUIConfirmationCard,
   ResponseUILeaseSelection,
   ResponseUISRPreviewCard,
+  UploadedDoc,
   WorkflowStep,
 } from "@/lib/types/chat";
 
@@ -46,6 +53,14 @@ function buildUserLabel(
   return text;
 }
 
+const ACTION_LABELS: Record<string, string> = {
+  save_fm_progress: "Saving FM progress…",
+  approve_fm_review: "Approving FM review…",
+  reject_fm_review: "Rejecting FM review…",
+  submit_rdd_report: "Submitting RDD report…",
+  approve_rdd_final: "Final approval…",
+};
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function ServiceRequestChat() {
@@ -55,12 +70,21 @@ export function ServiceRequestChat() {
   const [debugMode, setDebugMode] = useState(false);
   const [latestUI, setLatestUI] = useState<ResponseUI | null>(null);
   const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>(DEFAULT_STEPS);
-  // Persists the most recent SR draft preview across all turns, regardless of
-  // what responseUI type the current turn returned.  Updated from draftPreview
-  // (authoritative backend snapshot) or from responseUI when it is sr_preview_card.
   const [latestSRPreview, setLatestSRPreview] = useState<ResponseUISRPreviewCard | null>(null);
 
+  // Lifecycle state — populated from response.state on every turn
+  const [workflowStage, setWorkflowStage] = useState<string | null>(null);
+  const [srId, setSrId] = useState<string | null>(null);
+  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDoc[]>([]);
+  const [rddStatus, setRddStatus] = useState<string | null>(null);
+
+  // "Open existing SR" input — FM/DD can type an SR ID to continue a lifecycle
+  const [openSrInput, setOpenSrInput] = useState("");
+
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Get role from stored JWT user
+  const userRole = getStoredUser()?.role ?? null;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -77,8 +101,9 @@ export function ServiceRequestChat() {
         attachments?: File[];
         selectedLeaseId?: string;
         correctedFields?: Record<string, unknown>;
-        action?: "confirm" | "cancel";
+        action?: ChatAction;
         apiMessage?: string;
+        srIdOverride?: string;
       } = {},
     ) => {
       if (userVisibleText) {
@@ -101,6 +126,7 @@ export function ServiceRequestChat() {
           selectedLeaseId: opts.selectedLeaseId,
           correctedFields: opts.correctedFields,
           action: opts.action,
+          srId: opts.srIdOverride ?? srId ?? undefined,
         });
 
         setSessionId(res.sessionId);
@@ -111,9 +137,16 @@ export function ServiceRequestChat() {
 
         setLatestUI(res.responseUI);
 
-        // Keep the SR preview in sync on every turn.
-        // draftPreview is an authoritative snapshot from the backend; fall back
-        // to responseUI itself when the turn directly returned a preview card.
+        // Update lifecycle state from response.state
+        if (res.workflowStage !== undefined) setWorkflowStage(res.workflowStage);
+        if (res.srId) setSrId(res.srId);
+
+        // Track rdd_status from backend_refs if present in preview data
+        const previewData = res.draftPreview ?? (res.responseUI.type === "sr_preview_card" ? res.responseUI : null);
+        if (previewData?.status) {
+          setRddStatus(previewData.status);
+        }
+
         if (res.draftPreview) {
           setLatestSRPreview(res.draftPreview);
         } else if (res.responseUI.type === "sr_preview_card") {
@@ -141,7 +174,7 @@ export function ServiceRequestChat() {
         setIsPending(false);
       }
     },
-    [sessionId],
+    [sessionId, srId],
   );
 
   // ── Interaction handlers ───────────────────────────────────────────────────
@@ -182,9 +215,36 @@ export function ServiceRequestChat() {
     [sendTurn],
   );
 
+  // Handles FM/RDD structured lifecycle actions from StageActions buttons
+  const handleStageAction = useCallback(
+    (action: string) => {
+      const label = ACTION_LABELS[action] ?? action;
+      sendTurn(label, { action: action as ChatAction, apiMessage: "" });
+    },
+    [sendTurn],
+  );
+
+  // Handles a successfully uploaded document — adds to local list and notifies backend
+  const handleUploadComplete = useCallback((doc: UploadedDoc) => {
+    setUploadedDocuments((prev) => [...prev, doc]);
+  }, []);
+
+  // Opens an existing SR by SR ID (for FM Manager / DD Engineer)
+  const handleOpenSR = useCallback(() => {
+    const trimmed = openSrInput.trim();
+    if (!trimmed) return;
+    setSrId(trimmed);
+    sendTurn(`Opening SR ${trimmed}`, {
+      apiMessage: `I want to continue working on service request ${trimmed}`,
+      srIdOverride: trimmed,
+    });
+    setOpenSrInput("");
+  }, [openSrInput, sendTurn]);
+
   // ── Sidebar card selection ─────────────────────────────────────────────────
 
   const sidebarUI = latestUI;
+  const isLifecycleStage = workflowStage === "FM_REVIEW" || workflowStage === "RDD_REVIEW";
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -195,7 +255,6 @@ export function ServiceRequestChat() {
           <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
             Service Request Assistant
           </span>
-          {/* Debug mode toggle */}
           <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-zinc-400">
             <span>Debug</span>
             <button
@@ -254,9 +313,6 @@ export function ServiceRequestChat() {
                     )}
                     {isPreviewCard && (
                       <div className="mt-2">
-                        {/* Use latestSRPreview so the card reflects field updates
-                            made in subsequent turns; only the last card is editable
-                            and only when the SR has not yet been submitted. */}
                         <SRPreviewCard
                           data={latestSRPreview ?? (m.responseUI as ResponseUISRPreviewCard)}
                           onSave={
@@ -275,13 +331,75 @@ export function ServiceRequestChat() {
           )}
         </div>
 
-        {/* Input */}
+        {/* FM/RDD stage action buttons — shown inline above chat input */}
+        <StageActions
+          workflowStage={workflowStage}
+          userRole={userRole}
+          rddStatus={rddStatus}
+          onAction={handleStageAction}
+          disabled={isPending}
+        />
+
+        {/* Chat input */}
         <ChatInput onSend={handleSend} disabled={isPending} />
       </section>
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <aside className="space-y-3">
-        <WorkflowProgressCard steps={workflowSteps} />
+        {/* Lifecycle stepper — shown once an SR exists */}
+        <LifecycleStepper currentStage={workflowStage} srId={srId} />
+
+        {/* Open existing SR panel — for FM Manager / DD Engineer */}
+        {!srId && (
+          <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+              Continue Existing SR
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Enter SR ID…"
+                value={openSrInput}
+                onChange={(e) => setOpenSrInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleOpenSR()}
+                className="flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+              />
+              <button
+                type="button"
+                onClick={handleOpenSR}
+                disabled={!openSrInput.trim() || isPending}
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Open
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* SR context panel — shown during FM/RDD review */}
+        <StageContextPanel
+          workflowStage={workflowStage}
+          collectedData={latestSRPreview?.fields?.reduce(
+            (acc, f) => ({ ...acc, [f.key]: f.value ?? "" }),
+            {} as Record<string, string>,
+          )}
+          srId={srId}
+        />
+
+        {/* Document upload panel — stage-gated, shown during FM/RDD review */}
+        {isLifecycleStage && srId && sessionId && (
+          <DocumentUploadPanel
+            sessionId={sessionId}
+            srId={srId}
+            workflowStage={workflowStage}
+            userRole={userRole}
+            uploadedDocuments={uploadedDocuments}
+            onUploadComplete={handleUploadComplete}
+          />
+        )}
+
+        {/* CREATE_SR workflow progress steps */}
+        {!isLifecycleStage && <WorkflowProgressCard steps={workflowSteps} />}
 
         {sidebarUI?.type === "lease_selection" && (
           <LeaseSelectionCard data={sidebarUI} onSelect={handleLeaseSelect} />
@@ -303,10 +421,7 @@ export function ServiceRequestChat() {
           <DocumentRequirementCard data={sidebarUI} />
         )}
 
-        {/* Always render the latest SR draft/submitted preview when available.
-            latestSRPreview persists across turns so the card stays visible
-            even when the current responseUI is a plain message type.
-            onSave is only wired for drafts; submitted SRs are read-only. */}
+        {/* Always render latest SR draft/submitted preview */}
         {latestSRPreview && (
           <SRPreviewCard
             data={latestSRPreview}
@@ -323,6 +438,26 @@ export function ServiceRequestChat() {
             <p className="mt-1 break-all font-mono text-[10px] text-zinc-400 dark:text-zinc-600">
               {sessionId}
             </p>
+            {workflowStage && (
+              <>
+                <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                  Stage
+                </p>
+                <p className="mt-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-600">
+                  {workflowStage}
+                </p>
+              </>
+            )}
+            {srId && (
+              <>
+                <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                  SR ID
+                </p>
+                <p className="mt-1 break-all font-mono text-[10px] text-zinc-400 dark:text-zinc-600">
+                  {srId}
+                </p>
+              </>
+            )}
           </div>
         )}
       </aside>

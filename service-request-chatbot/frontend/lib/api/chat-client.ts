@@ -2,6 +2,7 @@ import type { ChatServiceRequest, ChatServiceResponse, ResponseUI } from "@/lib/
 import { getStoredToken, getStoredUser } from "@/lib/api/auth-client";
 
 function apiBase(): string {
+  // Backend mounts the chat route at /api/chat — not /api/v1/chat.
   const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
   return `${base.replace(/\/$/, "")}/api`;
 }
@@ -39,6 +40,7 @@ export async function postServiceRequestChat(
   }
 
   const data = await res.json();
+
   // The backend returns message text at top-level `data.message` and a
   // rendering hint at `data.ui`. Merge them so every ResponseUI variant has
   // a populated `message` field for the chat bubble.
@@ -50,10 +52,19 @@ export async function postServiceRequestChat(
     ? ({ ...data.draft_preview, message: "" } as import("@/lib/types/chat").ResponseUISRPreviewCard)
     : undefined;
 
+  // `state` carries workflow lifecycle metadata — workflow_stage, sr_id, etc.
+  const state: Record<string, unknown> = data.state ?? {};
+
   return {
     sessionId: data.session_id,
     traceId: data.trace_id ?? undefined,
     responseUI,
     draftPreview,
+    workflowStage: (state.workflow_stage as string | null) ?? null,
+    srId: (state.sr_id as string | null) ?? (data.sr_id as string | null) ?? null,
+    intent: (state.intent as string | null) ?? null,
+    missingFields: (state.missing_fields as string[]) ?? [],
+    readyToSubmit: (state.ready_to_submit as boolean) ?? false,
+    faqSources: (data.faq_sources as Array<{ source_type: string; title: string }>) ?? [],
   };
 }

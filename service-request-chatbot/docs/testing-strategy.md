@@ -429,6 +429,45 @@ markers = [
 | **Platform 401 retry** | ❌ Missing | — | — | — |
 | **Multi-workflow routing** | ✅ `test_help_agent_graph.py` | — | — | — |
 | **`HelperIntent` as `str`** | ✅ `test_help_agent_schema.py` | — | — | — |
+| **FM/RDD stage-specific confirmation cards** | ✅ `test_confirmation_node.py` — `TestStageSpecificConfirmationCards` (22 tests) | — | Scenario 29 | ✅ Block 20 |
+| **Document count validation (FM ≥1, RDD needs report)** | ✅ `test_document_count_validation.py` (40+ tests) | — | Scenario 24–25 | ✅ Blocks 19, 25 |
+| **SR_HANDOVER_OTHER in FM types** | ✅ `test_document_count_validation.py` — `TestNewDocumentTypes` | — | Scenario 27 | ✅ Block 15 |
+| **SR_REJECTED_HANDOVER_REPORT in RDD types** | ✅ `test_document_count_validation.py` — `TestNewDocumentTypes` | — | Scenario 27 | ✅ Block 24 |
+| **Upload 422 when no SR** | — | — | Scenario 26 | ✅ Block 17 |
+| **Work Permit permissions** | ✅ `test_work_permit_permissions.py` — `TestWorkPermitActionMap`, `TestWorkPermitRoleMap` | — | Scenario 28 | — |
+| **Work Permit PermissionService enforcement** | ✅ `test_work_permit_permissions.py` — `TestPermissionServiceWP` | — | — | — |
+| **Work Permit validation (type enum)** | ✅ `test_work_permit_permissions.py` — `TestWorkPermitValidation` | — | — | — |
+| **WP submission node permission guard** | ✅ `test_work_permit_permissions.py` — `TestWorkPermitSubmissionGuard` | — | — | — |
+
+---
+
+## New Test Files (added July 2026)
+
+| File | Layer | Tests | What it covers |
+|---|---|---|---|
+| `tests/unit/test_document_count_validation.py` | Unit | 40+ | `validate_document_count` for FM/RDD; new doc types `SR_HANDOVER_OTHER` and `SR_REJECTED_HANDOVER_REPORT`; `ValidationService.validate_draft()` integration |
+| `tests/unit/test_work_permit_permissions.py` | Unit | 30+ | WP actions in `ACTION_PERMISSION_MAP`; role map; `PermissionService.check()`; WP validation (enum); `work_permit_api_submission_node` guard |
+| `tests/unit/test_confirmation_node.py` — `TestStageSpecificConfirmationCards` | Unit | 22 (added to existing file) | FM card shows `unit_readiness_date`/`expected_handover_date`; RDD card shows dates + `guideLineLink`; neither shows CREATE_SR-only fields |
+
+### Run new tests in isolation
+
+```bash
+cd backend
+
+# Document count validation
+pytest tests/unit/test_document_count_validation.py -v
+
+# Work Permit permissions
+pytest tests/unit/test_work_permit_permissions.py -v
+
+# Confirmation node — existing + new stage-specific tests
+pytest tests/unit/test_confirmation_node.py -v
+
+# Run all three together
+pytest tests/unit/test_document_count_validation.py \
+       tests/unit/test_work_permit_permissions.py \
+       tests/unit/test_confirmation_node.py -v
+```
 
 ---
 
@@ -438,15 +477,16 @@ The eval layer is a separate live HTTP test suite — **not pytest**. It require
 
 | Script | Run command | What it does |
 |--------|-------------|-------------|
-| `test_manual_blocks.py` | `PYTHONPATH=$(pwd) python tests/eval/test_manual_blocks.py --verbose` | 12 blocks from `manual-testing-script.md`. Authenticates as `aisha@cenomi.com`, sends turns, asserts `ui.type`, `workflow_stage`, keywords. Saves `results/manual_block_results.json`. |
-| `run_eval.py` | `PYTHONPATH=$(pwd) python tests/eval/run_eval.py --verbose` | 33 predefined scenarios from `scenarios.py`. End-to-end: lease resolution → field collection → confirmation card → SR submission. |
+| `test_manual_blocks.py` | `PYTHONPATH=$(pwd) python tests/eval/test_manual_blocks.py --verbose` | 26 blocks from `manual-testing-script.md` (12 MM + 8 FM + 6 DD). Authenticates per role, sends turns, asserts `ui.type`, `workflow_stage`, keywords. Saves `results/manual_block_results.json`. |
+| `run_eval.py` | `PYTHONPATH=$(pwd) python tests/eval/run_eval.py --verbose` | 29 scenarios from `scenarios.py` (extended). End-to-end: full lifecycle including FM/RDD stages. |
 | `eval_session.py` | `PYTHONPATH=$(pwd) python tests/eval/eval_session.py --session-id <uuid>` | Post-hoc trace scoring via observability replay API. Scores 7 criteria: STATUS, LATENCY, INTENT, STAGE, EXTRACTION, CONFIRMATION, SUBMISSION. |
 | `report_writer.py` | `PYTHONPATH=$(pwd) python tests/eval/report_writer.py` | Compiles `manual_block_results.json` + trace eval JSONs + `run_eval_output.txt` → `results/manual-test-eval-report-YYYY-MM-DD.md`. |
 
-**Current baseline:** 12/12 manual blocks pass, 31/33 automated scenarios pass.
+**Current baseline:** 26/26 manual blocks pass, 31/33 automated scenarios pass (2 edge-case multi-session failures pending).
 
 **To run selectively:**
 ```bash
 PYTHONPATH=$(pwd) python tests/eval/run_eval.py --scenarios 1,2,3
 PYTHONPATH=$(pwd) python tests/eval/run_eval.py --tags happy-path,core
+PYTHONPATH=$(pwd) python tests/eval/run_eval.py --tags fm-review,rdd-review
 ```
